@@ -1,4 +1,6 @@
 from dataclasses import dataclass, field, replace
+from io import BytesIO
+from itertools import groupby
 from math import atan2, degrees
 from pathlib import Path
 from uuid import uuid4
@@ -24,7 +26,6 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QColorDialog,
-    QComboBox,
     QDoubleSpinBox,
     QFontComboBox,
     QFormLayout,
@@ -41,8 +42,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from pypdf import PdfReader, PdfWriter
+from pypdf.generic import DecodedStreamObject, NameObject
+
+from .localization import Choice, tr
 from .pdf import safe_local
-from .viewer import PageList, Thumbnails, Viewer, local_paths, page_item
+from .viewer import PageList, Thumbnails, Viewer, local_paths, page_item, translate_page_item
 
 SHAPES = (
     "Rectangle",
@@ -85,6 +90,35 @@ class Object:
     points: tuple[tuple[float, float], ...] = ()
 
 
+def text_document(obj):
+    font = QFont(obj.family)
+    font.setFamilies([obj.family, "Noto Sans Thai"])
+    font.setPixelSize(round(obj.size))
+    font.setBold(obj.bold)
+    font.setItalic(obj.italic)
+    font.setUnderline(obj.underline)
+    document = QTextDocument()
+    document.setDocumentMargin(0)
+    document.setDefaultFont(font)
+    document.setDefaultStyleSheet(f"body {{ color: {obj.color}; }}")
+    alignments = {
+        "Left": Qt.AlignmentFlag.AlignLeft,
+        "Center": Qt.AlignmentFlag.AlignHCenter,
+        "Right": Qt.AlignmentFlag.AlignRight,
+    }
+    option = QTextOption(alignments[obj.align])
+    option.setWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
+    document.setDefaultTextOption(option)
+    document.setPlainText(obj.text)
+    cursor = document.rootFrame().firstCursorPosition()
+    cursor.select(cursor.SelectionType.Document)
+    style = cursor.charFormat()
+    style.setForeground(QColor(obj.color))
+    cursor.mergeCharFormat(style)
+    document.setTextWidth(obj.width)
+    return document
+
+
 def paint_object(painter, obj):
     box = QRectF(0, 0, obj.width, obj.height)
     painter.save()
@@ -92,31 +126,7 @@ def paint_object(painter, obj):
     painter.setPen(QPen(QColor(obj.color), obj.stroke))
     painter.setBrush(QColor(obj.fill))
     if obj.kind == "Text":
-        font = QFont(obj.family)
-        font.setFamilies([obj.family, "Noto Sans Thai"])
-        font.setPixelSize(round(obj.size))
-        font.setBold(obj.bold)
-        font.setItalic(obj.italic)
-        font.setUnderline(obj.underline)
-        document = QTextDocument()
-        document.setDocumentMargin(0)
-        document.setDefaultFont(font)
-        document.setDefaultStyleSheet(f"body {{ color: {obj.color}; }}")
-        alignments = {
-            "Left": Qt.AlignmentFlag.AlignLeft,
-            "Center": Qt.AlignmentFlag.AlignHCenter,
-            "Right": Qt.AlignmentFlag.AlignRight,
-        }
-        option = QTextOption(alignments[obj.align])
-        option.setWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
-        document.setDefaultTextOption(option)
-        document.setPlainText(obj.text)
-        cursor = document.rootFrame().firstCursorPosition()
-        cursor.select(cursor.SelectionType.Document)
-        style = cursor.charFormat()
-        style.setForeground(QColor(obj.color))
-        cursor.mergeCharFormat(style)
-        document.setTextWidth(obj.width)
+        document = text_document(obj)
         painter.setClipRect(box)
         document.drawContents(painter, box)
     elif obj.kind == "Image":
@@ -150,6 +160,47 @@ def paint_object(painter, obj):
 
 def make_overlay(objects, width, height):
     """Export the same shaped Qt text, paths and images used by the canvas."""
+    if not any(has_thai_text(obj) for obj in objects):
+        return paint_overlay(objects, width, height)
+
+    writer = PdfWriter()
+    writer.pdf_header = "%PDF-1.4"
+    page = writer.add_blank_page(width, height)
+    for thai, group in groupby(objects, key=has_thai_text):
+        if thai:
+            for obj in group:
+                page.merge_page(thai_text_page(obj, width, height))
+        else:
+            painted = paint_overlay(group, width, height)
+            page.merge_page(PdfReader(BytesIO(painted)).pages[0])
+    output = BytesIO()
+    writer.write(output)
+    return output.getvalue()
+
+
+def has_thai_text(obj):
+    return obj.kind == "Text" and any("\u0e00" <= char <= "\u0e7f" for char in obj.text)
+
+
+def thai_text_page(obj, width, height):
+    painted = paint_overlay([obj], width, height)
+    page = PdfReader(BytesIO(painted)).pages[0]
+    content = page.get_contents()
+    if content is not None and text_document(obj).size().height() <= obj.height:
+        # Shaping can split combining marks across glyphs. Keep the original Unicode
+        # available to PDF readers that use replacement text when copying.
+        actual = (b"\xfe\xff" + obj.text.encode("utf-16-be")).hex()
+        stream = DecodedStreamObject()
+        stream.set_data(
+            f"/Span << /ActualText <{actual}> >> BDC\n".encode("ascii")
+            + content.get_data()
+            + b"\nEMC"
+        )
+        page[NameObject("/Contents")] = stream
+    return page
+
+
+def paint_overlay(objects, width, height):
     buffer = QBuffer()
     buffer.open(QIODevice.OpenModeFlag.WriteOnly)
     writer = QPdfWriter(buffer)
@@ -403,9 +454,9 @@ class Editor(QWidget):
         central = QWidget()
         controls = QVBoxLayout(central)
         toolbar = QHBoxLayout()
-        self.tool = QComboBox()
+        self.tool = Choice()
         self.tool.addItems(["Select", "Text", *SHAPES])
-        self.tool.currentTextChanged.connect(self.choose_tool)
+        self.tool.currentIndexChanged.connect(lambda _: self.choose_tool(self.tool.currentData()))
         toolbar.addWidget(self.tool)
         for label, callback in [
             ("Insert image", self.browse_image),
@@ -457,7 +508,7 @@ class Editor(QWidget):
         form.addRow("Text", self.text)
         self.font = QFontComboBox()
         form.addRow("Font", self.font)
-        self.align = QComboBox()
+        self.align = Choice()
         self.align.addItems(["Left", "Center", "Right"])
         form.addRow("Align", self.align)
         self.options = {}
@@ -497,7 +548,9 @@ class Editor(QWidget):
             form.addRow(button)
         self.text.textChanged.connect(lambda: self.modify("text", self.text.toPlainText()))
         self.font.currentFontChanged.connect(lambda font: self.modify("family", font.family()))
-        self.align.currentTextChanged.connect(lambda value: self.modify("align", value))
+        self.align.currentIndexChanged.connect(
+            lambda _: self.modify("align", self.align.currentData())
+        )
         return widget
 
     def inspect(self):
@@ -544,7 +597,7 @@ class Editor(QWidget):
             color = QColorDialog.getColor(
                 QColor(getattr(selected[0].obj, name)),
                 self,
-                "Choose color",
+                tr(self, "Choose color"),
                 QColorDialog.ColorDialogOption.ShowAlphaChannel,
             )
             if color.isValid():
@@ -567,7 +620,7 @@ class Editor(QWidget):
         self.sizes.clear()
         self.thumbnails.clear()
         for page in references:
-            self.pages.addItem(page_item(page))
+            self.pages.addItem(page_item(page, self))
         self.pages.setCurrentRow(0)
 
     def navigate(self, delta):
@@ -690,7 +743,7 @@ class Editor(QWidget):
         from PySide6.QtWidgets import QFileDialog
 
         name, _ = QFileDialog.getOpenFileName(
-            self, "Insert image", "", "Images (*.png *.jpg *.jpeg)"
+            self, tr(self, "Insert image"), "", tr(self, "Images (*.png *.jpg *.jpeg)")
         )
         if name and safe_local(Path(name)):
             self.add_image(QImage(name), QPointF(24, 24))
@@ -758,7 +811,7 @@ class Editor(QWidget):
             ("Bring to front", lambda: self.stack("front")),
             ("Send to back", lambda: self.stack("back")),
         ]:
-            menu.addAction(label, callback)
+            menu.addAction(tr(self, label), callback)
         menu.exec(self.canvas.viewport().mapToGlobal(point))
 
     def stack(self, direction):
@@ -784,6 +837,11 @@ class Editor(QWidget):
         return {
             index: make_overlay(items, *self.sizes[index]) for index, items in self.objects.items()
         }
+
+    def retranslate(self):
+        self.viewer.retranslate()
+        for index in range(self.pages.count()):
+            translate_page_item(self.pages.item(index), self)
 
     @property
     def dirty(self):

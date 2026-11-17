@@ -28,8 +28,20 @@ SetupIconFile=..\resources\pdf-toolbox.ico
 CloseApplications=yes
 RestartApplications=no
 
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "thai"; MessagesFile: "compiler:Languages\Thai.isl"
+
+[CustomMessages]
+english.ShortcutDesktop=Create a desktop shortcut
+thai.ShortcutDesktop=สร้างทางลัดบนเดสก์ท็อป
+english.LaunchToolbox=Launch PDF Toolbox
+thai.LaunchToolbox=เปิด PDF Toolbox
+english.CloseToolbox=Close PDF Toolbox and start the installer again.
+thai.CloseToolbox=ปิด PDF Toolbox แล้วเปิดตัวติดตั้งอีกครั้ง
+
 [Tasks]
-Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
+Name: "desktopicon"; Description: "{cm:ShortcutDesktop}"; Flags: unchecked
 
 [Files]
 Source: "{#BundleDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -39,7 +51,7 @@ Name: "{autoprograms}\PDF Toolbox"; Filename: "{app}\PDF Toolbox.exe"; WorkingDi
 Name: "{autodesktop}\PDF Toolbox"; Filename: "{app}\PDF Toolbox.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\PDF Toolbox.exe"; WorkingDir: "{app}"; Description: "Launch PDF Toolbox"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\PDF Toolbox.exe"; WorkingDir: "{app}"; Description: "{cm:LaunchToolbox}"; Flags: nowait postinstall skipifsilent
 
 [Code]
 var
@@ -115,5 +127,5 @@ begin
   Result := WaitForSingleObject(Handle, 15000) = 0;
   CloseHandle(Handle);
   if not Result then
-    MsgBox('Close PDF Toolbox and start the installer again.', mbError, MB_OK);
+    MsgBox(CustomMessage('CloseToolbox'), mbError, MB_OK);
 end;

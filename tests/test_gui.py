@@ -1,14 +1,15 @@
+from contextlib import closing
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QMimeData, QPointF, QSettings, Qt, QUrl
+from PySide6.QtCore import QMimeData, QPointF, QSettings, Qt, QTimer, QUrl
 from PySide6.QtGui import QColor, QDropEvent, QImage
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QCheckBox, QLabel, QMessageBox, QPushButton
 from pypdf import PdfReader, PdfWriter
 
 from pdf_toolbox import app
 from pdf_toolbox.editor import Object, load_fonts, make_overlay
-from pdf_toolbox.pdf import Page, dimensions, export, render
+from pdf_toolbox.pdf import Page, dimensions, export, locked_page, render
 from pdf_toolbox.workspace import TOOLS
 
 
@@ -184,3 +185,140 @@ def test_drop_and_clipboard_file_references(window, qtbot, tmp_path):
     window.paste()
     qtbot.waitUntil(lambda: not window.busy)
     assert window.workspace.listing.count() == 4
+
+
+def test_thai_language_switch_preserves_operation_and_page_selection(window, qtbot, tmp_path):
+    source = make_pdf(tmp_path / "คู่มือ.pdf")
+    window.select_tool(TOOLS[1], [source])
+    qtbot.waitUntil(lambda: not window.busy)
+    window.workspace.groups.setCurrentText("Every N pages")
+    window.workspace.range.setText("2")
+    window.workspace.listing.setCurrentRow(1)
+    before = window.workspace.output_plan()
+    window.settings.language.setCurrentText("ไทย")
+    assert window.workspace.groups.currentText() == "แบ่งทุก N หน้า"
+    assert window.workspace.output_plan() == before
+    assert window.workspace.listing.currentRow() == 1
+    assert window.workspace.viewer.counter.text() == "หน้า 2 จาก 2"
+    assert "ส่งออก…" in {button.text() for button in window.findChildren(QPushButton)}
+    assert "โฟลเดอร์ส่งออกเริ่มต้น" in {label.text() for label in window.findChildren(QLabel)}
+    assert "ตรวจสอบอัปเดตจาก GitHub ในเบื้องหลัง" in {
+        box.text() for box in window.findChildren(QCheckBox)
+    }
+    window.settings.language.setCurrentText("English")
+    assert window.workspace.groups.currentText() == "Every N pages"
+    assert window.workspace.output_plan() == before
+
+
+def test_thai_clipboard_text_exports_with_combining_marks(window, qtbot, tmp_path, monkeypatch):
+    path = make_pdf(tmp_path / "ต้นฉบับ.pdf")
+    window.settings.language.setCurrentText("ไทย")
+    window.select_tool(TOOLS[4], [path])
+    qtbot.waitUntil(lambda: not window.busy and not window.editor.loading)
+    text = "เก้าอี้ น้ำผึ้ง กุ้ง"
+    QApplication.clipboard().setText(text)
+    window.editor.paste(QApplication.clipboard().mimeData(), QPointF(12, 20))
+    assert window.editor.items()[0].obj.text == text
+    output = tmp_path / "แก้ไขแล้ว.pdf"
+    results = []
+    monkeypatch.setattr(window, "destination", lambda *_: output)
+    monkeypatch.setattr(window, "export_done", lambda *args: results.append(args))
+    window.save_editor()
+    qtbot.waitUntil(lambda: bool(results))
+    assert results == [([output], None)]
+    assert PdfReader(output).pdf_header >= "%PDF-1.4"
+    with locked_page(Page(output, 0)) as page:
+        with closing(page.get_textpage()) as textpage:
+            assert text in textpage.get_text_range()
+    assert render(Page(output, 0), dpi=144).crop((24, 40, 280, 110)).getextrema()[0][0] < 100
+
+
+def test_thai_replacement_text_excludes_clipped_lines(qapp, tmp_path):
+    obj = Object("Text", 8, 12, 90, 20, text="PDF เก้าอี้\nข้อความที่ซ่อน")
+    output = tmp_path / "clipped.pdf"
+    output.write_bytes(make_overlay([obj], 200, 160))
+    with locked_page(Page(output, 0)) as page, closing(page.get_textpage()) as textpage:
+        assert "ข้อความที่ซ่อน" not in textpage.get_text_range()
+
+
+def test_thai_confirmation_translates_buttons_and_preserves_choice(window):
+    window.settings.language.setCurrentText("ไทย")
+    seen = []
+
+    def decline():
+        box = window.findChild(QMessageBox)
+        no = box.button(QMessageBox.StandardButton.No)
+        seen.extend([box.windowTitle(), box.text(), no.text()])
+        no.click()
+
+    QTimer.singleShot(0, decline)
+    assert not window.confirm("Reset preferences?", "This restores the default app preferences.")
+    assert seen == [
+        "คืนค่าการตั้งค่าเริ่มต้นหรือไม่",
+        "การตั้งค่าแอปจะกลับเป็นค่าเริ่มต้น",
+        "ไม่",
+    ]
+
+
+def test_update_checks_consent_and_rejects_tampering_before_launch(window, tmp_path, monkeypatch):
+    import hashlib
+    import json
+
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    from pdf_toolbox.updater import ASSET, Config, Release, verify_manifest, version_tuple
+
+    major, minor, patch = version_tuple(app.VERSION)
+    version = f"{major}.{minor}.{patch + 1}"
+    key = Ed25519PrivateKey.generate()
+    config = Config("test-owner/test-private-releases", key.public_key().public_bytes_raw(), True)
+    content = b"installer from a signed test release"
+    installer = tmp_path / ASSET
+    installer.write_bytes(content)
+    payload = json.dumps(
+        {
+            "schema_version": 1,
+            "app_id": "pdf-toolbox",
+            "version": version,
+            "tag": f"v{version}",
+            "repository": config.repository,
+            "platform": "win32",
+            "architecture": "x64",
+            "installer_filename": ASSET,
+            "installer_size": len(content),
+            "sha256": hashlib.sha256(content).hexdigest(),
+            "release_date": "2026-11-17",
+        }
+    ).encode()
+    window.update_config = config
+    window.release = Release(
+        verify_manifest(config, payload, key.sign(payload), f"v{version}", app.VERSION), 3, ""
+    )
+    window.installer = installer
+    window.update_button.show()
+    window.settings.language.setCurrentText("ไทย")
+    launched = []
+    alerts = []
+    monkeypatch.setattr(app.subprocess, "Popen", lambda args: launched.append(args))
+    monkeypatch.setattr(window, "alert", alerts.append)
+    monkeypatch.setattr(window, "confirm", lambda *_: False)
+    window.install_update()
+    assert not launched
+    assert not window.prefs.contains("pending_upgrade")
+
+    monkeypatch.setattr(window, "confirm", lambda *_: True)
+    installer.write_bytes(b"!" * len(content))
+    window.install_update()
+    assert alerts
+    assert not launched
+    assert window.installer is None
+    assert window.update_button.text() == "มีอัปเดต"
+    assert not window.prefs.contains("pending_upgrade")
+
+    installer.write_bytes(content)
+    window.installer = installer
+    window.install_update()
+    assert launched[0][0] == str(installer)
+    persisted = QSettings(window.prefs.fileName(), QSettings.Format.IniFormat)
+    assert persisted.value("pending_upgrade") == version
+    assert persisted.value("language") == "ไทย"

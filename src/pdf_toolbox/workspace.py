@@ -5,7 +5,6 @@ from PySide6.QtCore import QItemSelectionModel, QSize, Qt, Signal
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -17,8 +16,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .localization import Choice, tr
 from .pdf import Page, convert, export, page_range, publish, split_groups, write_pdf
-from .viewer import PageList, Thumbnails, Viewer, page_item
+from .viewer import PageList, Thumbnails, Viewer, page_item, translate_page_item
 
 TOOLS = ("Merge / Append", "Split PDF", "Remove / Extract", "PDF to JPG / PNG", "Edit PDF")
 
@@ -61,34 +61,36 @@ class Workspace(QWidget):
         self.listing.itemSelectionChanged.connect(self.summarize)
         self.listing.model().rowsMoved.connect(self.order_changed)
         self.listing.reordered.connect(self.order_changed)
-        self.groups = QComboBox()
+        self.groups = Choice()
         self.groups.addItems(["Individual pages", "Every N pages", "Custom ranges", "Boundaries"])
-        self.groups.currentTextChanged.connect(self.summarize)
+        self.groups.currentIndexChanged.connect(self.summarize)
         self.range = QLineEdit()
         self.range.textChanged.connect(self.summarize)
         self.naming = QLineEdit()
         self.naming.setPlaceholderText("Filename prefix or {n} pattern")
         self.zip = QCheckBox("Export as ZIP")
-        self.fmt = QComboBox()
+        self.fmt = Choice()
         self.fmt.addItems(["JPEG", "PNG"])
-        self.fmt.currentTextChanged.connect(self.summarize)
+        self.fmt.currentIndexChanged.connect(self.summarize)
         self.dpi = QSpinBox()
         self.dpi.setRange(1, 2400)
         self.dpi.setValue(200)
         self.dpi.setSuffix(" DPI")
         self.dpi.valueChanged.connect(self.summarize)
-        self.preset = QComboBox()
+        self.preset = Choice()
         self.preset.addItems(
             ["Custom", "72 DPI", "96 DPI", "150 DPI", "200 DPI", "300 DPI", "600 DPI"]
         )
         self.preset.setCurrentText("200 DPI")
-        self.preset.currentTextChanged.connect(self.set_preset)
+        self.preset.currentIndexChanged.connect(
+            lambda _: self.set_preset(self.preset.currentData())
+        )
         self.quality = QSpinBox()
         self.quality.setRange(1, 100)
         self.quality.setValue(90)
         self.quality.setPrefix("JPG quality ")
         self.transparent = QCheckBox("Transparent PNG")
-        self.action = QComboBox()
+        self.action = Choice()
         self.action.addItems(
             [
                 "Save page order",
@@ -97,8 +99,8 @@ class Workspace(QWidget):
                 "Extract selected separately",
             ]
         )
-        self.action.currentTextChanged.connect(self.summarize)
-        self.position = QComboBox()
+        self.action.currentIndexChanged.connect(self.summarize)
+        self.position = Choice()
         self.position.addItems(["Append at end", "Insert before current page"])
         self.export_button = QPushButton("Export…")
         self.export_button.setProperty("primary", True)
@@ -246,7 +248,7 @@ class Workspace(QWidget):
         self.refreshing = True
         self.listing.clear()
         for page in self.history[self.cursor]:
-            self.listing.addItem(page_item(page))
+            self.listing.addItem(page_item(page, self))
         self.refresh_documents()
         self.refreshing = False
         count = self.listing.count()
@@ -279,10 +281,29 @@ class Workspace(QWidget):
                 size = f"{reference.path.stat().st_size / 1024:.0f} KB"
             except OSError:
                 size = "size unavailable"
-            item.setText(f"{reference.path.stem}\n{counts[reference.path]} pages · {size}")
-            item.setToolTip(f"{reference.path.name}\nDouble-click to jump to its first page.")
             item.setData(Qt.ItemDataRole.UserRole, reference)
+            item.setData(Qt.ItemDataRole.UserRole + 1, size)
+            self.translate_document(item, counts[reference.path])
             self.documents.addItem(item)
+
+    def translate_document(self, item, count):
+        reference = item.data(Qt.ItemDataRole.UserRole)
+        size = tr(self, item.data(Qt.ItemDataRole.UserRole + 1))
+        meta = tr(self, "{pages} pages · {size}", pages=count, size=size)
+        hint = tr(self, "Double-click to jump to its first page.")
+        item.setText(f"{reference.path.stem}\n{meta}")
+        item.setToolTip(f"{reference.path.name}\n{hint}")
+
+    def retranslate(self):
+        self.viewer.retranslate()
+        counts = Counter(page.path for page in self.pages())
+        for index in range(self.documents.count()):
+            item = self.documents.item(index)
+            self.translate_document(item, counts[item.data(Qt.ItemDataRole.UserRole).path])
+        if self.mode != TOOLS[1]:
+            for index in range(self.listing.count()):
+                translate_page_item(self.listing.item(index), self)
+        self.summarize()
 
     def reorder_documents(self):
         pages = self.pages()
@@ -356,7 +377,7 @@ class Workspace(QWidget):
         if not 0 <= row < self.listing.count() - 1:
             self.failed.emit("Select a page before the last page to place a split after it.")
             return
-        old = self.range.text() if self.groups.currentText() == "Boundaries" else ""
+        old = self.range.text() if self.groups.currentData() == "Boundaries" else ""
         self.groups.setCurrentText("Boundaries")
         try:
             values = set(page_range(old, self.listing.count() - 1)) if old else set()
@@ -376,49 +397,59 @@ class Workspace(QWidget):
         separate = self.mode == TOOLS[2] and self.action.currentIndex() == 3
         self.naming.setVisible(split or converting or separate)
         self.zip.setVisible(split or converting or separate)
-        self.quality.setEnabled(self.fmt.currentText() == "JPEG")
-        self.transparent.setEnabled(self.fmt.currentText() == "PNG")
-        self.range.setPlaceholderText(
+        self.quality.setEnabled(self.fmt.currentData() == "JPEG")
+        self.transparent.setEnabled(self.fmt.currentData() == "PNG")
+        hint = (
             {
                 "Every N pages": "Pages per file",
                 "Custom ranges": "Groups such as 1-3;4-6;7",
                 "Boundaries": "Split after pages such as 2,4",
-            }.get(self.groups.currentText(), "All pages" if split else "Page range, e.g. 1–3,5")
+            }.get(self.groups.currentData(), "All pages" if split else "Page range, e.g. 1–3,5")
             if split
             else "Page range, e.g. 1-3,5"
         )
+        self.range.setPlaceholderText(tr(self, hint))
         documents = Counter(page.path for page in self.pages())
-        details = f"{len(documents)} PDF(s) · {count} pages · {selection} selected"
+        details = [
+            tr(
+                self,
+                "{documents} PDF(s) · {pages} pages · {selection} selected",
+                documents=len(documents),
+                pages=count,
+                selection=selection,
+            )
+        ]
         if self.mode == TOOLS[2] and self.action.currentIndex() == 1:
-            details += f" · {count - selection} remaining"
+            details.append(tr(self, "{count} remaining", count=count - selection))
         if split and count:
             boundaries = set()
             try:
-                groups = split_groups(self.groups.currentText(), self.range.text(), count)
-                details += f" · {len(groups)} output files"
-                if self.groups.currentText() == "Boundaries":
+                groups = split_groups(self.groups.currentData(), self.range.text(), count)
+                details.append(tr(self, "{count} output files", count=len(groups)))
+                if self.groups.currentData() == "Boundaries":
                     boundaries = {group[-1] for group in groups[:-1]}
                 if len(groups) <= 12:
-                    details += " · " + " / ".join(
-                        f"{group[0] + 1}–{group[-1] + 1}" for group in groups
+                    details.append(
+                        " / ".join(f"{group[0] + 1}–{group[-1] + 1}" for group in groups)
                     )
             except ValueError as error:
-                details += f" · {error}"
+                details.append(tr(self, str(error)))
             for index in range(count):
                 item = self.listing.item(index)
-                page = item.data(Qt.ItemDataRole.UserRole)
                 marked = index in boundaries
-                new_title = f"{page.path.stem}\nPage {page.index + 1}" + (
-                    "\n▼ Split after" if marked else ""
-                )
-                if item.text() != new_title:
-                    item.setText(new_title)
-                    item.setBackground(QBrush(QColor("#567eb0")) if marked else QBrush())
+                translate_page_item(item, self, split=marked)
+                item.setBackground(QBrush(QColor("#567eb0")) if marked else QBrush())
         if converting and self.viewer.page and not self.viewer.image.pixmap().isNull():
             rect = self.viewer.scene.sceneRect()
-            details += f" · Preview ≈ {round(rect.width() * self.dpi.value() / 72)} × "
-            details += f"{round(rect.height() * self.dpi.value() / 72)} px"
-        self.summary.setText(details)
+            details.append(
+                tr(
+                    self,
+                    "Preview ≈ {width} × {height} px",
+                    width=round(rect.width() * self.dpi.value() / 72),
+                    height=round(rect.height() * self.dpi.value() / 72),
+                )
+            )
+        self.summary.setText(" · ".join(details))
         self.export_button.setEnabled(bool(count))
 
     def output_plan(self):
@@ -432,7 +463,7 @@ class Workspace(QWidget):
         if mode == TOOLS[1]:
             groups = [
                 [pages[i] for i in group]
-                for group in split_groups(self.groups.currentText(), self.range.text(), len(pages))
+                for group in split_groups(self.groups.currentData(), self.range.text(), len(pages))
             ]
         if mode == TOOLS[2]:
             action = self.action.currentIndex()
@@ -457,7 +488,7 @@ class Workspace(QWidget):
         prefix = self.naming.text().strip() or "PDF Toolbox"
         mode = self.mode
         archive = self.zip.isChecked()
-        fmt = self.fmt.currentText()
+        fmt = self.fmt.currentData()
         quality, dpi, transparency = (
             self.quality.value(),
             self.dpi.value(),

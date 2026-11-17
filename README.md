@@ -6,6 +6,8 @@ PDF Toolbox is a local Windows x64 desktop application for combining, splitting,
 
 Open [the user guide](USER_GUIDE.md) for installation and usage. See [the feature matrix](FEATURE_MATRIX.md) and [test report](TEST_REPORT.md) for current verification status.
 
+[คู่มือภาษาไทย](USER_GUIDE_TH.md)
+
 ## Develop on Windows
 
 Install uv, then run these commands in PowerShell.

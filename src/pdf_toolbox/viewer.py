@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .localization import tr
 from .pdf import check_cancelled, page_size, render
 
 
@@ -141,6 +142,8 @@ class Viewer(QWidget):
         self.counter = QLabel("No page selected")
         self.status = QLabel()
         self.page = None
+        self.index = self.count = 0
+        self.status_message = ""
         self.generation = 0
         self.rendering = None
         self.fit_mode = "page"
@@ -173,9 +176,10 @@ class Viewer(QWidget):
         self.generation += 1
         generation = self.generation
         self.page = page
+        self.index, self.count = index, count
         self.image.setPixmap(QPixmap())
-        self.counter.setText(f"Page {index + 1} of {count}" if page else "No page selected")
-        self.status.setText("Rendering page…" if page else "")
+        self.set_status("Rendering page…" if page else "")
+        self.retranslate()
         if not page:
             return
 
@@ -183,13 +187,13 @@ class Viewer(QWidget):
             if generation != self.generation:
                 return
             if error:
-                self.status.setText("This page could not be rendered.")
+                self.set_status("This page could not be rendered.")
                 return
             picture, (width, height) = value
             self.image.setPixmap(QPixmap.fromImage(picture))
             self.image.setScale(width / picture.width())
             self.scene.setSceneRect(0, 0, width, height)
-            self.status.clear()
+            self.set_status("")
             self.fit(self.fit_mode)
             self.shown.emit(page, (width, height))
 
@@ -198,6 +202,18 @@ class Viewer(QWidget):
             return preview(page, 1500)
 
         self.rendering = self.jobs.submit(work, done)
+
+    def set_status(self, source):
+        self.status_message = source
+        self.status.setText(tr(self, source))
+
+    def retranslate(self):
+        self.counter.setText(
+            tr(self, "Page {page} of {total}", page=self.index + 1, total=self.count)
+            if self.page
+            else tr(self, "No page selected")
+        )
+        self.set_status(self.status_message)
 
     def fit(self, mode):
         self.fit_mode = mode
@@ -287,8 +303,18 @@ class Thumbnails:
         self.cache.clear()
 
 
-def page_item(page):
-    item = QListWidgetItem(f"{page.path.stem}\nPage {page.index + 1}")
-    item.setToolTip(f"{page.path.name} · Page {page.index + 1}")
+def translate_page_item(item, widget, *, split=False):
+    page = item.data(Qt.ItemDataRole.UserRole)
+    caption = tr(widget, "Page {page}", page=page.index + 1)
+    title = f"{page.path.stem}\n{caption}"
+    if split:
+        title += "\n" + tr(widget, "▼ Split after")
+    item.setText(title)
+    item.setToolTip(f"{page.path.name} · {caption}")
+
+
+def page_item(page, widget):
+    item = QListWidgetItem()
     item.setData(Qt.ItemDataRole.UserRole, page)
+    translate_page_item(item, widget)
     return item

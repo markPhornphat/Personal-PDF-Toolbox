@@ -1,5 +1,7 @@
 # PDF Toolbox user guide
 
+[คู่มือภาษาไทย](USER_GUIDE_TH.md)
+
 Run PDF-Toolbox-Setup-x64.exe, choose where to install, and open PDF Toolbox from the Start menu. The installer includes the PDF tools and their runtime. If Windows shows a publisher prompt, verify the installer with the person who provided it.
 
 Drop files on Home or choose Browse files. You can also copy a file in File Explorer and press Ctrl+V in PDF Toolbox.

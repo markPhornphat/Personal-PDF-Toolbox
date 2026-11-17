@@ -8,6 +8,7 @@ data = [
     (str(metadata / "VERSION"), "."),
     (str(root / "THIRD_PARTY_LICENSES.md"), "."),
     (str(root / "USER_GUIDE.md"), "."),
+    (str(root / "USER_GUIDE_TH.md"), "."),
     (str(root / "resources" / "fonts"), "resources/fonts"),
     (str(root / "resources" / "pdf-toolbox.ico"), "resources"),
 ]

@@ -15,7 +15,6 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QGridLayout,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -41,7 +40,8 @@ from .pdf import (
     page_range,
     safe_local,
 )
-from .settings import COMMON, DARK, LIGHT, THAI, Settings, data_path, preferences
+from .localization import ask_text, localize_buttons, retranslate_controls, thai_enabled, tr
+from .settings import COMMON, DARK, LIGHT, Settings, data_path, preferences
 from .updater import Config, Credentials, GitHub, UpdateError, verify_file
 from .viewer import local_paths
 from .workspace import TOOLS, Workspace
@@ -149,7 +149,8 @@ class Window(QMainWindow):
         brand = QLabel("PDF Toolbox")
         brand.setObjectName("Brand")
         nav.addWidget(brand)
-        nav.addWidget(QLabel(f"Version {VERSION}"))
+        self.version_label = QLabel()
+        nav.addWidget(self.version_label)
         nav.addSpacing(18)
         for label, action in [
             ("Home", lambda: self.show_panel(self.home)),
@@ -199,10 +200,10 @@ class Window(QMainWindow):
         drop = DropArea(self.browse)
         drop.files.connect(self.accept_files)
         layout.addWidget(drop)
-        search = QLineEdit()
-        search.setPlaceholderText("Search tools")
-        search.textChanged.connect(self.filter_tools)
-        layout.addWidget(search)
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Search tools")
+        self.search.textChanged.connect(self.filter_tools)
+        layout.addWidget(self.search)
         label = QLabel("All tools")
         label.setObjectName("Section")
         layout.addWidget(label)
@@ -270,21 +271,18 @@ class Window(QMainWindow):
         )
 
     def translate(self):
-        thai = self.prefs.value("language", "English") == "ไทย"
-        for widget in [*self.findChildren(QLabel), *self.findChildren(QPushButton)]:
-            source = widget.property("untranslated")
-            if source is None:
-                source = widget.text()
-                if source.split("\n")[0] not in THAI:
-                    continue
-                widget.setProperty("untranslated", source)
-            head, separator, tail = source.partition("\n")
-            widget.setText(f"{THAI.get(head, head) if thai else head}{separator}{tail}")
-        for widget in self.findChildren(QLineEdit):
-            source = widget.property("untranslated_hint") or widget.placeholderText()
-            if source in THAI:
-                widget.setProperty("untranslated_hint", source)
-                widget.setPlaceholderText(THAI[source] if thai else source)
+        retranslate_controls(self)
+        self.filter_tools(self.search.text())
+        self.version_label.setText(tr(self, "Version {version}", version=VERSION))
+        self.update_button.setText(
+            tr(self, "Ready to install" if self.installer else "Update available")
+        )
+        self.settings.status.setText(
+            tr(self, self.prefs.value("update_status", "No update checks yet"))
+        )
+        self.workspace.retranslate()
+        self.editor.retranslate()
+        self.editor_status()
 
     def filter_tools(self, query):
         for button in self.cards:
@@ -303,7 +301,6 @@ class Window(QMainWindow):
         else:
             if self.workspace.mode != tool:
                 self.workspace.configure(tool)
-                self.workspace.title.setProperty("untranslated", tool)
             self.workspace.dpi.setValue(self.prefs.value("dpi", 200, type=int))
             self.workspace.quality.setValue(self.prefs.value("quality", 90, type=int))
             self.show_panel(self.workspace)
@@ -314,7 +311,7 @@ class Window(QMainWindow):
     def browse(self):
         home = self.stack.currentWidget() == self.home
         kind = "PDF and images (*.pdf *.jpg *.jpeg *.png)" if home else "PDF files (*.pdf)"
-        names, _ = QFileDialog.getOpenFileNames(self, "Choose files", "", kind)
+        names, _ = QFileDialog.getOpenFileNames(self, tr(self, "Choose files"), "", tr(self, kind))
         if names:
             self.accept_files([Path(name) for name in names])
 
@@ -333,7 +330,7 @@ class Window(QMainWindow):
 
     def browse_range(self):
         selected, _ = QFileDialog.getOpenFileName(
-            self, "Choose a PDF for page insertion", "", "PDF files (*.pdf)"
+            self, tr(self, "Choose a PDF for page insertion"), "", tr(self, "PDF files (*.pdf)")
         )
         if selected:
             self.load_files([Path(selected)], self.workspace, choose_range=True)
@@ -382,7 +379,7 @@ class Window(QMainWindow):
         if not pdfs:
             self.select_tool(TOOLS[4])
             selected, _ = QFileDialog.getOpenFileName(
-                self, "Open a PDF for image insertion", "", "PDF files (*.pdf)"
+                self, tr(self, "Open a PDF for image insertion"), "", tr(self, "PDF files (*.pdf)")
             )
             if selected:
                 self.resolve_editor(
@@ -392,7 +389,9 @@ class Window(QMainWindow):
         menu = QMenu(self)
         choices = (TOOLS[0], TOOLS[3]) if len(pdfs) > 1 else TOOLS
         for choice in choices:
-            menu.addAction(choice, lambda tool=choice: self.open_suggestion(tool, pdfs, images))
+            menu.addAction(
+                tr(self, choice), lambda tool=choice: self.open_suggestion(tool, pdfs, images)
+            )
         menu.exec(self.stack.mapToGlobal(self.stack.rect().center()))
 
     def open_suggestion(self, tool, pdfs, images):
@@ -426,10 +425,10 @@ class Window(QMainWindow):
         def load(path, password):
             def done(total, error):
                 if isinstance(error, PasswordRequired):
-                    value, ok = QInputDialog.getText(
+                    value, ok = ask_text(
                         self,
                         "Password protected PDF",
-                        f"Password for {path.name}",
+                        tr(self, "Password for {name}", name=path.name),
                         QLineEdit.EchoMode.Password,
                     )
                     if ok:
@@ -441,10 +440,15 @@ class Window(QMainWindow):
                 else:
                     indexes = range(total)
                     if choose_range:
-                        answer, ok = QInputDialog.getText(
+                        answer, ok = ask_text(
                             self,
                             "Insert a page range",
-                            f"{path.name} has {total} pages. Enter a range such as 1-3,5.",
+                            tr(
+                                self,
+                                "{name} has {total} pages. Enter a range such as 1-3,5.",
+                                name=path.name,
+                                total=total,
+                            ),
                         )
                         if not ok:
                             return
@@ -468,7 +472,8 @@ class Window(QMainWindow):
 
     def editor_status(self):
         name = self.editor.references[0].path.name if self.editor.references else ""
-        self.editor_label.setText(f"{name}  •  Unsaved changes" if self.editor.dirty else name)
+        status = tr(self, "Unsaved changes")
+        self.editor_label.setText(f"{name}  •  {status}" if self.editor.dirty else name)
 
     def save_current(self):
         panel = self.stack.currentWidget()
@@ -480,11 +485,11 @@ class Window(QMainWindow):
     def destination(self, suggested=None):
         folder = self.prefs.value("folder", "")
         if suggested is None:
-            found = QFileDialog.getExistingDirectory(self, "Choose output folder", folder)
+            found = QFileDialog.getExistingDirectory(self, tr(self, "Choose output folder"), folder)
         else:
             initial = str(Path(folder) / suggested) if folder else suggested
             found, _ = QFileDialog.getSaveFileName(
-                self, "Save as PDF", initial, "PDF files (*.pdf)"
+                self, tr(self, "Save as PDF"), initial, tr(self, "PDF files (*.pdf)")
             )
             if found and not found.lower().endswith(".pdf"):
                 found += ".pdf"
@@ -548,15 +553,14 @@ class Window(QMainWindow):
         if not self.editor.dirty:
             proceed()
             return
-        buttons = QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Cancel
+        buttons = [QMessageBox.StandardButton.Save, QMessageBox.StandardButton.Cancel]
         if allow_discard:
-            buttons |= QMessageBox.StandardButton.Discard
-        selected = QMessageBox.question(
-            self,
+            buttons.append(QMessageBox.StandardButton.Discard)
+        selected = self.question(
             "Save changes?",
             "The PDF has unsaved edits.",
-            buttons,
             QMessageBox.StandardButton.Save,
+            *buttons,
         )
         if selected == QMessageBox.StandardButton.Save:
             self.save_editor(after=proceed)
@@ -603,17 +607,18 @@ class Window(QMainWindow):
             return
         box = QMessageBox(
             QMessageBox.Icon.Information,
-            "Export complete",
-            f"Saved {len(results)} file(s).",
+            tr(self, "Export complete"),
+            tr(self, "Saved {count} file(s).", count=len(results)),
             parent=self,
         )
-        folder = box.addButton("Open folder", QMessageBox.ButtonRole.ActionRole)
+        folder = box.addButton(tr(self, "Open folder"), QMessageBox.ButtonRole.ActionRole)
         file = (
-            box.addButton("Open file", QMessageBox.ButtonRole.ActionRole)
+            box.addButton(tr(self, "Open file"), QMessageBox.ButtonRole.ActionRole)
             if len(results) == 1
             else None
         )
         box.addButton(QMessageBox.StandardButton.Close)
+        localize_buttons(box, QMessageBox.StandardButton.Close)
         box.exec()
         if box.clickedButton() == folder:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(results[0].parent)))
@@ -626,18 +631,33 @@ class Window(QMainWindow):
         self.notice("Preview cache cleared.")
 
     def notice(self, text, timeout=8000):
-        self.statusBar().showMessage(text, timeout)
+        self.statusBar().showMessage(tr(self, text), timeout)
 
     def alert(self, text):
-        QMessageBox.warning(self, "PDF Toolbox", text)
+        button = QMessageBox.StandardButton.Ok
+        box = QMessageBox(QMessageBox.Icon.Warning, "PDF Toolbox", tr(self, text), button, self)
+        box.setTextFormat(Qt.TextFormat.PlainText)
+        localize_buttons(box, button)
+        box.exec()
+
+    def question(self, title, text, default, *buttons):
+        box = QMessageBox(QMessageBox.Icon.Question, tr(self, title), tr(self, text), parent=self)
+        for button in buttons:
+            box.addButton(button)
+        localize_buttons(box, *buttons)
+        box.setDefaultButton(default)
+        box.setTextFormat(Qt.TextFormat.PlainText)
+        box.exec()
+        clicked = box.clickedButton()
+        return box.standardButton(clicked) if clicked else QMessageBox.StandardButton.NoButton
 
     def confirm(self, title, text):
         return (
-            QMessageBox.question(
-                self,
+            self.question(
                 title,
                 text,
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
                 QMessageBox.StandardButton.No,
             )
             == QMessageBox.StandardButton.Yes
@@ -646,13 +666,15 @@ class Window(QMainWindow):
     def about(self):
         box = QMessageBox(
             QMessageBox.Icon.Information,
-            "About PDF Toolbox",
-            f"PDF Toolbox {VERSION}\nLocal desktop PDF tools",
+            tr(self, "About PDF Toolbox"),
+            f"PDF Toolbox {VERSION}\n" + tr(self, "Local desktop PDF tools"),
             parent=self,
         )
-        update = box.addButton("Check for updates", QMessageBox.ButtonRole.ActionRole)
-        licenses = box.addButton("Licenses", QMessageBox.ButtonRole.ActionRole)
+        update = box.addButton(tr(self, "Check for updates"), QMessageBox.ButtonRole.ActionRole)
+        licenses = box.addButton(tr(self, "Licenses"), QMessageBox.ButtonRole.ActionRole)
+        guide = box.addButton(tr(self, "User guide"), QMessageBox.ButtonRole.ActionRole)
         box.addButton(QMessageBox.StandardButton.Close)
+        localize_buttons(box, QMessageBox.StandardButton.Close)
         box.exec()
         if box.clickedButton() == update:
             self.check_updates(manual=True)
@@ -660,6 +682,9 @@ class Window(QMainWindow):
             file = RESOURCE / "THIRD_PARTY_LICENSES.md"
             if file.exists():
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(file)))
+        elif box.clickedButton() == guide:
+            filename = "USER_GUIDE_TH.md" if thai_enabled(self) else "USER_GUIDE.md"
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(RESOURCE / filename)))
 
     def check_updates(self, *, manual):
         if self.update_running or self.update_button.isVisible():
@@ -718,7 +743,7 @@ class Window(QMainWindow):
 
     def update_status(self, text):
         self.prefs.setValue("update_status", text)
-        self.settings.status.setText(text)
+        self.settings.status.setText(tr(self, text))
 
     def offer_update(self):
         if self.busy or self.update_running or not self.release:
@@ -730,16 +755,32 @@ class Window(QMainWindow):
         details = release.manifest
         box = QMessageBox(
             QMessageBox.Icon.Information,
-            "Update available",
-            f"Installed {VERSION} • Available {details.version}\n"
+            tr(self, "Update available"),
+            tr(
+                self,
+                "Installed {installed} • Available {latest}",
+                installed=VERSION,
+                latest=details.version,
+            )
+            + "\n"
             f"{details.date} • {details.size / 1048576:.1f} MB",
             parent=self,
         )
         box.setTextFormat(Qt.TextFormat.PlainText)
         box.setDetailedText(release.notes)
-        now = box.addButton("Update now", QMessageBox.ButtonRole.AcceptRole)
-        later = box.addButton("Later", QMessageBox.ButtonRole.RejectRole)
-        skip = box.addButton("Skip this version", QMessageBox.ButtonRole.ActionRole)
+        if release.notes and thai_enabled(self):
+            for button in box.buttons():
+                if button.text() in {"Show Details...", "Show Details…"}:
+                    button.setText(tr(self, "Show Details…"))
+                    button.clicked.connect(
+                        lambda _, details_button=button: details_button.setText(
+                            tr(self, details_button.text().replace("...", "…"))
+                        )
+                    )
+                    break
+        now = box.addButton(tr(self, "Update now"), QMessageBox.ButtonRole.AcceptRole)
+        later = box.addButton(tr(self, "Later"), QMessageBox.ButtonRole.RejectRole)
+        skip = box.addButton(tr(self, "Skip this version"), QMessageBox.ButtonRole.ActionRole)
         box.setDefaultButton(later)
         box.exec()
         if box.clickedButton() == skip:
@@ -763,7 +804,15 @@ class Window(QMainWindow):
         def progress(current, total):
             if not self.busy:
                 self.progress_value(current, total)
-                self.notice(f"Downloaded {current / 1048576:.1f} of {total / 1048576:.1f} MB", 0)
+                self.notice(
+                    tr(
+                        self,
+                        "Downloaded {current:.1f} of {total:.1f} MB",
+                        current=current / 1048576,
+                        total=total / 1048576,
+                    ),
+                    0,
+                )
 
         def done(path, error):
             self.update_running = None
@@ -778,7 +827,7 @@ class Window(QMainWindow):
                 )
             else:
                 self.installer = path
-                self.update_button.setText("Ready to install")
+                self.update_button.setText(tr(self, "Ready to install"))
                 self.notice("Update verified. Select Ready to install when you’re ready.")
 
         self.update_running = self.update_jobs.submit(work, done, progress)
@@ -786,6 +835,7 @@ class Window(QMainWindow):
     def install_update(self):
         if self.busy or not self.installer or not self.release:
             return
+        installer, release = self.installer, self.release
         if not self.confirm(
             "Install update?", "PDF Toolbox will close and start the verified installer."
         ):
@@ -794,18 +844,26 @@ class Window(QMainWindow):
         def launch():
             try:
                 verify_file(
-                    self.installer,
-                    self.release.manifest,
+                    installer,
+                    release.manifest,
                     self.update_config.require_authenticode if self.update_config else False,
                 )
-                self.prefs.setValue("pending_upgrade", self.release.manifest.version)
-                self.prefs.setValue("upgrade_installer", str(self.installer))
-                self.prefs.sync()
-                subprocess.Popen([str(self.installer), f"/WAITPID={os.getpid()}"])
             except (OSError, UpdateError):
+                self.installer = None
+                self.update_button.setText(tr(self, "Update available"))
+                self.discard_download(installer)
+                self.statusBar().clearMessage()
+                self.alert("The downloaded installer could not be verified. Download it again.")
+                return
+            try:
+                self.prefs.setValue("pending_upgrade", release.manifest.version)
+                self.prefs.setValue("upgrade_installer", str(installer))
+                self.prefs.sync()
+                subprocess.Popen([str(installer), f"/WAITPID={os.getpid()}"])
+            except OSError:
                 self.prefs.remove("pending_upgrade")
                 self.prefs.remove("upgrade_installer")
-                self.alert("The installer could not start. Try downloading the update again.")
+                self.alert("The installer could not start. Try again.")
                 return
             self.close_approved = True
             self.close()
@@ -820,17 +878,22 @@ class Window(QMainWindow):
         stored = self.prefs.value("upgrade_installer", "")
         self.prefs.remove("upgrade_installer")
         if pending == VERSION:
-            self.notice(f"Updated to {VERSION}.")
-            path = Path(stored)
-            expected = data_path() / "updates"
-            if path.name == "PDF-Toolbox-Setup-x64.exe" and path.parent.parent == expected:
-                try:
-                    path.unlink(missing_ok=True)
-                    path.parent.rmdir()
-                except OSError:
-                    pass
+            self.notice(tr(self, "Updated to {version}.", version=VERSION))
+            self.discard_download(Path(stored))
         else:
             self.notice("The update did not complete. You can continue using this version.")
+
+    @staticmethod
+    def discard_download(path):
+        if (
+            path.name == "PDF-Toolbox-Setup-x64.exe"
+            and path.parent.parent == data_path() / "updates"
+        ):
+            try:
+                path.unlink(missing_ok=True)
+                path.parent.rmdir()
+            except OSError:
+                pass
 
     def closeEvent(self, event):
         if self.busy:
@@ -879,12 +942,13 @@ def main():
 
 
 def verify_bundled_runtime():
+    from contextlib import closing
     from tempfile import TemporaryDirectory
 
     from pypdf import PdfReader, PdfWriter
 
     from .editor import Object, make_overlay
-    from .pdf import render
+    from .pdf import locked_page, render
 
     with TemporaryDirectory() as temporary:
         root = Path(temporary)
@@ -893,10 +957,14 @@ def verify_bundled_runtime():
         writer = PdfWriter()
         writer.add_blank_page(100, 100)
         writer.write(source)
-        stamp = make_overlay([Object("Text", 8, 12, 90, 40, text="PDF ภาษาไทย")], 100, 100)
+        text = "PDF เก้าอี้"
+        stamp = make_overlay([Object("Text", 8, 12, 90, 40, text=text)], 100, 100)
         export([Page(source, 0)], output, overlays={0: stamp})
         reader = PdfReader(output)
         if "PDF" not in reader.pages[0].extract_text():
             raise RuntimeError("Packaged text export failed")
+        with locked_page(Page(output, 0)) as page, closing(page.get_textpage()) as textpage:
+            if text not in textpage.get_text_range():
+                raise RuntimeError("Packaged Thai text extraction failed")
         if render(Page(output, 0), dpi=72).size != (100, 100):
             raise RuntimeError("Packaged page rendering failed")

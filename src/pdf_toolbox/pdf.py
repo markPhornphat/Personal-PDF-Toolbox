@@ -204,8 +204,9 @@ def write_pdf(
                 writer.reset_translation(reader)
             output = writer.add_page(reader.pages[reference.index], excluded_keys=("/AA",))
             if overlays and index in overlays:
-                stamp = PdfReader(io.BytesIO(overlays[index])).pages[0]
-                output.merge_transformed_page(stamp, overlay_transform(output))
+                stamp = PdfReader(io.BytesIO(overlays[index]))
+                writer.pdf_header = max(writer.pdf_header, stamp.pdf_header)
+                output.merge_transformed_page(stamp.pages[0], overlay_transform(output))
             if progress:
                 progress(index + 1, len(pages))
         writer.write(destination)
