@@ -5,7 +5,7 @@ from math import atan2, degrees
 from pathlib import Path
 from uuid import uuid4
 
-from PySide6.QtCore import QBuffer, QIODevice, QMarginsF, QPointF, QRectF, QSizeF, Qt, Signal
+from PySide6.QtCore import QBuffer, QIODevice, QMarginsF, QPointF, QRectF, QSize, QSizeF, Qt, Signal
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFontComboBox,
     QFormLayout,
+    QFrame,
     QGraphicsItem,
     QGraphicsScene,
     QGraphicsView,
@@ -36,6 +37,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMenu,
     QPushButton,
+    QScrollArea,
     QSplitter,
     QTextEdit,
     QVBoxLayout,
@@ -45,7 +47,8 @@ from PySide6.QtWidgets import (
 from pypdf import PdfReader, PdfWriter
 from pypdf.generic import DecodedStreamObject, NameObject
 
-from .localization import Choice, tr
+from .appearance import action_button, icon_button
+from .localization import Choice, describe_button, tr
 from .pdf import safe_local
 from .viewer import PageList, Thumbnails, Viewer, local_paths, page_item, translate_page_item
 
@@ -431,7 +434,9 @@ class Editor(QWidget):
         self.canvas = Canvas(self.scene)
         self.viewer = Viewer(jobs, self.scene, self.canvas)
         self.pages = PageList(reorder=False)
-        self.pages.setMaximumWidth(185)
+        self.pages.setGridSize(QSize(111, 147))
+        self.pages.setMinimumWidth(134)
+        self.pages.setMaximumWidth(155)
         self.thumbnails = Thumbnails(self.pages, thumbnails)
         self.objects: dict[int, list[Object]] = {}
         self.sizes = {}
@@ -458,21 +463,27 @@ class Editor(QWidget):
         self.tool.addItems(["Select", "Text", *SHAPES])
         self.tool.currentIndexChanged.connect(lambda _: self.choose_tool(self.tool.currentData()))
         toolbar.addWidget(self.tool)
-        for label, callback in [
-            ("Insert image", self.browse_image),
-            ("Undo", self.undo),
-            ("Redo", self.redo),
-            ("Delete", self.delete),
+        for label, callback, icon in [
+            ("Insert image", self.browse_image, "image"),
+            ("Undo", self.undo, "undo"),
+            ("Redo", self.redo, "redo"),
+            ("Delete", self.delete, "delete"),
         ]:
-            button = QPushButton(label)
+            button = action_button(icon, label) if icon == "image" else icon_button(icon, label)
             button.clicked.connect(callback)
             toolbar.addWidget(button)
         toolbar.addStretch()
         controls.addLayout(toolbar)
         controls.addWidget(self.viewer)
         splitter.addWidget(central)
-        splitter.addWidget(self.properties)
-        splitter.setSizes([160, 720, 220])
+        inspector = QScrollArea()
+        inspector.setObjectName("Inspector")
+        inspector.setMinimumWidth(222)
+        inspector.setWidgetResizable(True)
+        inspector.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        inspector.setWidget(self.properties)
+        splitter.addWidget(inspector)
+        splitter.setSizes([138, 630, 266])
         self.pages.currentRowChanged.connect(self.show_page)
         self.pages.files_dropped.connect(self.open_requested)
         self.viewer.on_previous = lambda: self.navigate(-1)
@@ -499,14 +510,25 @@ class Editor(QWidget):
         self.inspect()
 
     def build_inspector(self):
-        widget = QWidget()
+        widget = QFrame()
+        widget.setObjectName("InspectorBody")
         form = QFormLayout(widget)
-        form.addRow(QLabel("Object properties"))
+        form.setContentsMargins(12, 11, 12, 13)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        title = QLabel("Object properties")
+        title.setObjectName("Section")
+        title.setWordWrap(True)
+        form.addRow(title)
         self.text = QTextEdit()
         self.text.setAcceptRichText(False)
-        self.text.setMaximumHeight(102)
+        self.text.setFixedHeight(73)
         form.addRow("Text", self.text)
         self.font = QFontComboBox()
+        self.font.setMinimumContentsLength(9)
+        self.font.setSizeAdjustPolicy(
+            self.font.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
         form.addRow("Font", self.font)
         self.align = Choice()
         self.align.addItems(["Left", "Center", "Right"])
@@ -801,6 +823,7 @@ class Editor(QWidget):
 
     def context_menu(self, point):
         menu = QMenu(self)
+        menu.setToolTipsVisible(True)
         for label, callback in [
             ("Copy", self.copy_objects),
             ("Cut", self.cut),
@@ -811,7 +834,8 @@ class Editor(QWidget):
             ("Bring to front", lambda: self.stack("front")),
             ("Send to back", lambda: self.stack("back")),
         ]:
-            menu.addAction(tr(self, label), callback)
+            action = menu.addAction(tr(self, label), callback)
+            describe_button(action, self, label)
         menu.exec(self.canvas.viewport().mapToGlobal(point))
 
     def stack(self, direction):

@@ -1,10 +1,32 @@
 import hashlib
 import json
+from urllib.error import HTTPError
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from pdf_toolbox.updater import ASSET, Config, Redirects, UpdateError, verify_manifest, verify_file
+from pdf_toolbox.updater import (
+    ASSET,
+    Config,
+    GitHub,
+    Redirects,
+    UpdateError,
+    verify_manifest,
+    verify_file,
+)
+
+
+def test_public_repo_without_releases_reports_no_public_release(monkeypatch):
+    client = GitHub(Config("owner/repo", bytes(32), private=False))
+
+    def latest_not_found(request, *, timeout):
+        assert request.full_url.endswith("/releases/latest")
+        assert request.get_header("Authorization") is None
+        raise HTTPError(request.full_url, 404, "Not found", {}, None)
+
+    monkeypatch.setattr(client.client, "open", latest_not_found)
+    with pytest.raises(UpdateError, match="No public update release was found"):
+        client.check("0.1.4")
 
 
 def test_manifest_rejects_tampering_mismatch_and_non_upgrade(tmp_path):

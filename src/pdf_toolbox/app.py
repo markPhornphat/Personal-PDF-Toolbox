@@ -7,12 +7,14 @@ import time
 import tomllib
 from pathlib import Path
 
-from PySide6.QtCore import QStandardPaths, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QIcon, QKeySequence, QShortcut
+from PySide6.QtCore import QEasingCurve, QEvent, QPropertyAnimation, QSize, QStandardPaths
+from PySide6.QtCore import Qt, QTimer, QUrl, Signal
+from PySide6.QtGui import QActionGroup, QColor, QDesktopServices, QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
     QFileDialog,
+    QGraphicsOpacityEffect,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -28,6 +30,17 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .appearance import (
+    DARK,
+    LIGHT,
+    Mascot,
+    ToolCard,
+    action_button,
+    load_display_font,
+    motion_enabled,
+    stylesheet,
+    tool_icon,
+)
 from .editor import Editor, load_fonts
 from .jobs import Jobs, message_for
 from .pdf import (
@@ -40,11 +53,20 @@ from .pdf import (
     page_range,
     safe_local,
 )
-from .localization import ask_text, localize_buttons, retranslate_controls, thai_enabled, tr
-from .settings import COMMON, DARK, LIGHT, Settings, data_path, preferences
+from .localization import (
+    ask_text,
+    describe_button,
+    describe_buttons,
+    localize_buttons,
+    retranslate_controls,
+    thai_enabled,
+    tr,
+)
+from .progress import ProcessingDialog
+from .settings import Settings, data_path, preferences
 from .updater import Config, Credentials, GitHub, UpdateError, verify_file
 from .viewer import local_paths
-from .workspace import TOOLS, Workspace
+from .workspace import ORGANIZE, TOOLS, Workspace
 
 RESOURCE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
 PACKAGED = bool(getattr(sys, "frozen", False))
@@ -61,30 +83,26 @@ DESCRIPTIONS = (
     "Keep, remove or extract selected pages",
     "Export pages at the resolution you choose",
     "Add text, pictures and shapes",
+    "Reorder, rotate and insert pages",
 )
 IMAGE_TYPES = {".png", ".jpg", ".jpeg"}
+TOOL_ICONS = ("merge", "split", "extract", "image", "edit", "organize")
+NAV_ICONS = dict(
+    zip(
+        ("Home", *TOOLS, "Settings", "About"),
+        ("home", *TOOL_ICONS, "settings", "about"),
+        strict=True,
+    )
+)
+TOOL_TONES = ("pistachio", "rose", "lilac", "butter", "rose", "organize")
 
 
-class DropArea(QFrame):
+class FileDropFrame(QFrame):
     files = Signal(list)
 
-    def __init__(self, browse):
+    def __init__(self):
         super().__init__()
-        self.setObjectName("DropArea")
         self.setAcceptDrops(True)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 22, 18, 22)
-        headline = QLabel("Drop PDF, JPG or PNG files here")
-        headline.setObjectName("Section")
-        headline.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        tip = QLabel("Select files, or paste copied files with Ctrl+V.")
-        tip.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        choose = QPushButton("Browse files…")
-        choose.setProperty("primary", True)
-        choose.clicked.connect(browse)
-        layout.addWidget(headline)
-        layout.addWidget(tip)
-        layout.addWidget(choose, alignment=Qt.AlignmentFlag.AlignHCenter)
 
     def highlight(self, value):
         self.setProperty("dragging", value)
@@ -92,7 +110,7 @@ class DropArea(QFrame):
         self.style().polish(self)
 
     def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls():
+        if local_paths(event.mimeData()):
             self.highlight(True)
             event.acceptProposedAction()
 
@@ -102,22 +120,126 @@ class DropArea(QFrame):
 
     def dropEvent(self, event):
         self.highlight(False)
-        self.files.emit(local_paths(event.mimeData()))
-        event.acceptProposedAction()
+        paths = local_paths(event.mimeData())
+        if paths:
+            self.files.emit(paths)
+            event.acceptProposedAction()
+
+
+class DropArea(FileDropFrame):
+    def __init__(self, browse):
+        super().__init__()
+        self.setObjectName("DropArea")
+        self.setMinimumHeight(307)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(33, 13, 19, 13)
+        layout.setSpacing(8)
+        copy = QVBoxLayout()
+        copy.setSpacing(9)
+        headline = QLabel("Drop a file to\nget started")
+        headline.setObjectName("HeroTitle")
+        headline.setWordWrap(True)
+        tip = QLabel("PDF, JPG or PNG. Paste files with Ctrl+V.")
+        tip.setObjectName("HeroHint")
+        tip.setWordWrap(True)
+        choose = action_button("folder", "Browse files…", primary=True)
+        choose.setObjectName("BrowsePrimary")
+        choose.clicked.connect(browse)
+        copy.addStretch()
+        copy.addWidget(headline)
+        copy.addWidget(tip)
+        copy.addSpacing(5)
+        copy.addWidget(choose, alignment=Qt.AlignmentFlag.AlignLeft)
+        copy.addStretch()
+        layout.addLayout(copy, 3)
+        self.mascot = Mascot(RESOURCE / "resources/paper-dog.png")
+        layout.addWidget(self.mascot, 2)
+
+
+class EmptyTool(QWidget):
+    def __init__(self, browse):
+        super().__init__()
+        self.tool = TOOLS[0]
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(10)
+        layout.addStretch(2)
+        center = Qt.AlignmentFlag.AlignHCenter
+        self.icon = QLabel()
+        self.icon.setObjectName("EmptyToolIcon")
+        self.icon.setFixedSize(80, 80)
+        self.icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.icon_opacity = QGraphicsOpacityEffect(self.icon, opacity=1.0)
+        self.icon.setGraphicsEffect(self.icon_opacity)
+        self.reveal = QPropertyAnimation(self.icon_opacity, b"opacity", self)
+        self.reveal.setDuration(160)
+        self.reveal.setStartValue(0.25)
+        self.reveal.setEndValue(1.0)
+        self.reveal.setEasingCurve(QEasingCurve.Type.OutCubic)
+        layout.addWidget(self.icon, alignment=center)
+        self.title = QLabel()
+        self.title.setObjectName("EmptyToolTitle")
+        self.description = QLabel()
+        self.description.setObjectName("HeroHint")
+        for label in (self.title, self.description):
+            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            label.setWordWrap(True)
+            layout.addWidget(label)
+        layout.addSpacing(14)
+
+        self.drop = FileDropFrame()
+        self.drop.setObjectName("ToolDropArea")
+        self.drop.setMaximumWidth(534)
+        field = QVBoxLayout(self.drop)
+        field.setContentsMargins(24, 22, 24, 23)
+        field.setSpacing(12)
+        self.hint = QLabel()
+        self.hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.hint.setWordWrap(True)
+        field.addWidget(self.hint)
+        self.choose = action_button("folder", "Browse files…", primary=True)
+        self.choose.setObjectName("BrowsePrimary")
+        self.choose.clicked.connect(browse)
+        field.addWidget(self.choose, alignment=center)
+        layout.addWidget(self.drop)
+        layout.setAlignment(self.drop, center)
+        self.drop.setMinimumWidth(416)
+        layout.addStretch(3)
+
+    def refresh(self, palette):
+        index = TOOLS.index(self.tool)
+        self.icon.setProperty("tone", TOOL_TONES[index])
+        self.icon.style().unpolish(self.icon)
+        self.icon.style().polish(self.icon)
+        ink = palette["organize_ink"] if self.tool == ORGANIZE else palette["primary"]
+        self.icon.setPixmap(tool_icon(TOOL_ICONS[index], ink, 40).pixmap(40, 40))
+        self.title.setText(tr(self, self.tool))
+        self.description.setText(tr(self, DESCRIPTIONS[index]))
+        single = self.tool in {TOOLS[1], TOOLS[4]}
+        self.hint.setText(tr(self, "Drop a PDF here" if single else "Drop one or more PDFs here"))
+
+    def animate_icon(self):
+        self.reveal.stop()
+        if motion_enabled(self):
+            self.reveal.start()
+        else:
+            self.icon_opacity.setOpacity(1.0)
 
 
 class Window(QMainWindow):
-    def __init__(self):
+    def __init__(self, prefs=None):
         super().__init__()
+        load_display_font(RESOURCE)
         self.setWindowTitle(f"PDF Toolbox {VERSION}")
         self.resize(1260, 790)
         self.setMinimumSize(980, 650)
         self.setAcceptDrops(True)
-        self.prefs = preferences()
+        self.prefs = prefs if prefs is not None else preferences()
         self.jobs = Jobs(self)
         self.thumbs = Jobs(self, threads=1)
         self.update_jobs = Jobs(self, threads=1)
         self.busy = None
+        self.processing = None
         self.update_running = None
         self.release = None
         self.installer = None
@@ -127,15 +249,20 @@ class Window(QMainWindow):
 
         self.stack = QStackedWidget()
         self.home = self.build_home()
+        self.suggestion_menu = QMenu(self)
+        self.suggestion_menu.setToolTipsVisible(True)
         self.workspace = Workspace(self.jobs, self.thumbs)
         self.editor = Editor(self.jobs, self.thumbs)
         self.editor_view = self.build_editor()
+        self.empty_tool = EmptyTool(self.browse)
         self.settings = Settings(self)
-        for panel in [self.home, self.workspace, self.editor_view, self.settings]:
+        for panel in [self.home, self.workspace, self.editor_view, self.empty_tool, self.settings]:
             self.stack.addWidget(panel)
         self.workspace.browse.connect(self.browse)
         self.workspace.browse_range.connect(self.browse_range)
         self.workspace.add_files.connect(self.accept_files)
+        self.workspace.pages_changed.connect(self.refresh_tool_page)
+        self.empty_tool.drop.files.connect(self.accept_files)
         self.workspace.failed.connect(self.alert)
         self.workspace.run_requested.connect(self.run_workspace)
         self.editor.alert.connect(self.alert)
@@ -144,32 +271,66 @@ class Window(QMainWindow):
 
         main = QWidget()
         columns = QHBoxLayout(main)
-        columns.setContentsMargins(14, 12, 14, 12)
-        nav = QVBoxLayout()
+        columns.setContentsMargins(17, 17, 20, 5)
+        columns.setSpacing(19)
+        sidebar = QFrame()
+        sidebar.setObjectName("Sidebar")
+        sidebar.setFixedWidth(208)
+        nav = QVBoxLayout(sidebar)
+        nav.setContentsMargins(12, 17, 12, 13)
+        nav.setSpacing(5)
+        identity = QHBoxLayout()
+        identity.setSpacing(8)
+        self.brand_mark = QLabel()
+        self.brand_mark.setObjectName("BrandMark")
+        self.brand_mark.setFixedSize(33, 35)
+        self.brand_mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
         brand = QLabel("PDF Toolbox")
         brand.setObjectName("Brand")
-        nav.addWidget(brand)
+        identity.addWidget(self.brand_mark)
+        identity.addWidget(brand, 1)
+        nav.addLayout(identity)
         self.version_label = QLabel()
-        nav.addWidget(self.version_label)
-        nav.addSpacing(18)
-        for label, action in [
-            ("Home", lambda: self.show_panel(self.home)),
-            *[(tool, lambda name=tool: self.select_tool(name)) for tool in TOOLS],
-            ("Settings", lambda: self.show_panel(self.settings)),
-            ("About", self.about),
-        ]:
+        self.version_label.setObjectName("Muted")
+        nav.addSpacing(17)
+        self.nav_buttons = {}
+        for index, (label, action) in enumerate(
+            [
+                ("Home", lambda: self.show_panel(self.home)),
+                *[(tool, lambda _checked, name=tool: self.select_tool(name)) for tool in TOOLS],
+                ("Settings", lambda: self.show_panel(self.settings)),
+                ("About", self.about),
+            ]
+        ):
+            if index == len(TOOLS) + 1:
+                nav.addStretch()
             button = QPushButton(label)
-            button.setMinimumWidth(145)
+            button.setObjectName("NavButton")
+            button.setIconSize(QSize(20, 20))
             button.clicked.connect(action)
-            nav.addWidget(button)
-        nav.addStretch()
+            self.nav_buttons[label] = button
+            if label == "Settings":
+                row = QHBoxLayout()
+                row.setSpacing(4)
+                row.addWidget(button, 1)
+                row.addWidget(self.build_theme_button())
+                nav.addLayout(row)
+            else:
+                nav.addWidget(button)
         self.update_button = QPushButton("Update available")
         self.update_button.clicked.connect(self.offer_update)
         self.update_button.hide()
         nav.addWidget(self.update_button)
-        columns.addLayout(nav)
+        divider = QFrame()
+        divider.setObjectName("Divider")
+        divider.setFixedHeight(1)
+        nav.addSpacing(3)
+        nav.addWidget(divider)
+        nav.addWidget(self.version_label)
+        columns.addWidget(sidebar)
         columns.addWidget(self.stack, 1)
         self.setCentralWidget(main)
+        self.stack.currentChanged.connect(self.refresh_navigation)
 
         self.progress = QProgressBar()
         self.progress.setMaximumWidth(180)
@@ -183,6 +344,7 @@ class Window(QMainWindow):
         self.install_shortcuts()
         self.apply_theme()
         self.translate()
+        self.refresh_navigation()
         self.update_timer = QTimer(self)
         self.update_timer.setInterval(15 * 60 * 1000)
         self.update_timer.timeout.connect(lambda: self.check_updates(manual=False))
@@ -193,32 +355,70 @@ class Window(QMainWindow):
     def build_home(self):
         home = QWidget()
         layout = QVBoxLayout(home)
-        layout.setContentsMargins(16, 10, 16, 12)
-        heading = QLabel("Home")
-        heading.setObjectName("Heading")
-        layout.addWidget(heading)
-        drop = DropArea(self.browse)
-        drop.files.connect(self.accept_files)
-        layout.addWidget(drop)
+        layout.setContentsMargins(0, 0, 0, 6)
+        layout.setSpacing(13)
+        self.drop = DropArea(self.browse)
+        self.drop.files.connect(self.accept_files)
+        layout.addWidget(self.drop)
+        tools = QHBoxLayout()
+        label = QLabel("PDF tools")
+        label.setObjectName("Section")
+        tools.addWidget(label, 1)
         self.search = QLineEdit()
+        self.search.setObjectName("ToolSearch")
+        self.search.setMaximumWidth(238)
+        self.search.setMinimumWidth(205)
+        self.search.setClearButtonEnabled(True)
+        self.search.setAccessibleName("Search tools")
         self.search.setPlaceholderText("Search tools")
         self.search.textChanged.connect(self.filter_tools)
-        layout.addWidget(self.search)
-        label = QLabel("All tools")
-        label.setObjectName("Section")
-        layout.addWidget(label)
-        grid = QGridLayout()
+        tools.addWidget(self.search)
+        layout.addSpacing(6)
+        layout.addLayout(tools)
+        self.tool_grid = QGridLayout()
+        self.tool_grid.setSpacing(11)
+        for column in range(3):
+            self.tool_grid.setColumnStretch(column, 1)
         self.cards = []
-        for index, (name, detail) in enumerate(zip(TOOLS, DESCRIPTIONS, strict=True)):
-            button = QPushButton(f"{name}\n{detail}")
-            button.setObjectName("ToolCard")
-            button.setToolTip(detail)
+        for name, detail, kind, tone in zip(
+            TOOLS, DESCRIPTIONS, TOOL_ICONS, TOOL_TONES, strict=True
+        ):
+            button = ToolCard(name, detail, kind, tone, featured=name == ORGANIZE)
+            button.setParent(home)
             button.clicked.connect(lambda _, tool=name: self.select_tool(tool))
-            grid.addWidget(button, index // 2, index % 2)
             self.cards.append(button)
-        layout.addLayout(grid)
-        layout.addStretch()
+        layout.addLayout(self.tool_grid)
+        self.no_tool_results = QLabel("No tools match your search.")
+        self.no_tool_results.setObjectName("NoToolResults")
+        layout.addWidget(self.no_tool_results)
+        layout.addStretch(1)
+        self.filter_tools("")
+        order = [self.search, *self.cards]
+        for first, second in zip(order, order[1:]):
+            QWidget.setTabOrder(first, second)
         return home
+
+    def build_theme_button(self):
+        button = QPushButton()
+        button.setObjectName("ThemeButton")
+        button.setIconSize(QSize(19, 19))
+        button.setFixedWidth(36)
+        button.setAccessibleName("Theme")
+        menu = QMenu(button)
+        menu.setToolTipsVisible(True)
+        group = QActionGroup(menu)
+        self.theme_actions = {}
+        for theme in ("System", "Light", "Dark"):
+            action = menu.addAction(theme)
+            action.setCheckable(True)
+            group.addAction(action)
+            action.triggered.connect(
+                lambda _checked, value=theme: self.settings.theme.setCurrentText(value)
+            )
+            self.theme_actions[theme] = action
+        button.setMenu(menu)
+        self.theme_button = button
+        return button
 
     def build_editor(self):
         wrap = QWidget()
@@ -230,21 +430,20 @@ class Window(QMainWindow):
         self.editor_label = QLabel()
         buttons.addWidget(self.editor_label)
         buttons.addStretch()
-        for label, slot in [
-            ("Browse files…", self.browse),
-            ("Save", self.save_editor),
-            ("Save as…", self.save_editor),
+        for label, icon, slot in [
+            ("Browse files…", "folder", self.browse),
+            ("Save", "save", self.save_editor),
+            ("Save as…", "export", self.save_editor),
         ]:
-            button = QPushButton(label)
+            button = action_button(icon, label, primary=label == "Save as…")
             button.clicked.connect(slot)
-            if label == "Save as…":
-                button.setProperty("primary", True)
             buttons.addWidget(button)
         panel.addLayout(buttons)
         panel.addWidget(self.editor)
         return wrap
 
     def install_shortcuts(self):
+        self.search.installEventFilter(self)
         for sequence, slot in [
             ("Ctrl+O", self.browse),
             ("Ctrl+V", self.paste),
@@ -266,12 +465,40 @@ class Window(QMainWindow):
     def apply_theme(self):
         system = QApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
         theme = self.prefs.value("theme", "System")
-        self.setStyleSheet(
-            COMMON + (DARK if theme == "Dark" or (theme == "System" and system) else LIGHT)
+        palette = DARK if theme == "Dark" or (theme == "System" and system) else LIGHT
+        self.theme_palette = palette
+        self.setStyleSheet(stylesheet(palette))
+        for label, button in self.nav_buttons.items():
+            button.setIcon(tool_icon(NAV_ICONS[label], palette["primary"]))
+        for button in self.findChildren(QPushButton):
+            kind = button.property("iconKind")
+            if kind:
+                color = palette["on_primary"] if button.property("primary") else palette["primary"]
+                button.setIcon(tool_icon(kind, color))
+        self.brand_mark.setPixmap(tool_icon("paper", palette["on_primary"]).pixmap(22, 22))
+        for card in self.cards:
+            card.set_icon_color(
+                palette["organize_ink"] if card.kind == "organize" else palette["primary"]
+            )
+        for value, action in self.theme_actions.items():
+            action.setChecked(value == theme)
+        self.theme_button.setIcon(
+            tool_icon("moon" if palette is DARK else "sun", palette["primary"])
         )
+        self.empty_tool.refresh(palette)
+        self.drop.mascot.backing = QColor(palette["art"])
+        self.drop.mascot.update()
 
     def translate(self):
         retranslate_controls(self)
+        self.search.setAccessibleName(tr(self, "Search tools"))
+        self.drop.mascot.setAccessibleName(tr(self, "Dog with an ice cream cone"))
+        for value, action in self.theme_actions.items():
+            action.setText(tr(self, value))
+            describe_button(action, self, value)
+        self.empty_tool.refresh(self.theme_palette)
+        for card in self.cards:
+            card.refresh_accessibility()
         self.filter_tools(self.search.text())
         self.version_label.setText(tr(self, "Version {version}", version=VERSION))
         self.update_button.setText(
@@ -283,50 +510,139 @@ class Window(QMainWindow):
         self.workspace.retranslate()
         self.editor.retranslate()
         self.editor_status()
+        describe_buttons(self, self)
+        describe_button(self.settings.folder, self, "Choose folder…")
 
     def filter_tools(self, query):
-        for button in self.cards:
-            button.setVisible(query.casefold().strip() in button.text().casefold())
+        query = query.casefold().strip()
+        visible = [card for card in self.cards if card.matches(query)]
+        for card in self.cards:
+            self.tool_grid.removeWidget(card)
+            card.setVisible(card in visible)
+        for index, card in enumerate(visible):
+            self.tool_grid.addWidget(card, index // 3, index % 3)
+        self.no_tool_results.setVisible(not visible)
+        rows = (len(visible) + 2) // 3
+        for row in range(2):
+            self.tool_grid.setRowMinimumHeight(row, 105 if row < rows else 0)
+
+    def refresh_navigation(self):
+        panel = self.active_panel()
+        if panel is self.workspace:
+            active = self.workspace.mode
+        else:
+            active = {self.home: "Home", self.settings: "Settings", self.editor_view: TOOLS[4]}.get(
+                panel
+            )
+        for name, button in self.nav_buttons.items():
+            selected = name == active
+            if button.property("active") != selected:
+                button.setProperty("active", selected)
+                button.style().unpolish(button)
+                button.style().polish(button)
 
     def show_panel(self, panel):
         if not self.busy:
             self.stack.setCurrentWidget(panel)
+
+    def active_panel(self):
+        panel = self.stack.currentWidget()
+        if panel is self.empty_tool:
+            return self.editor_view if self.empty_tool.tool == TOOLS[4] else self.workspace
+        return panel
+
+    def show_tool_page(self, panel):
+        if panel is self.workspace:
+            tool, has_pages = self.workspace.mode, self.workspace.listing.count() > 0
+        else:
+            tool, has_pages = TOOLS[4], bool(self.editor.references)
+        if has_pages:
+            self.show_panel(panel)
+        else:
+            changed = (
+                self.empty_tool.tool != tool or self.stack.currentWidget() is not self.empty_tool
+            )
+            self.empty_tool.tool = tool
+            self.empty_tool.refresh(self.theme_palette)
+            self.show_panel(self.empty_tool)
+            if changed:
+                self.empty_tool.animate_icon()
+
+    def refresh_tool_page(self):
+        panel = self.active_panel()
+        if panel is self.workspace or panel is self.editor_view:
+            self.show_tool_page(panel)
 
     def select_tool(self, tool, files=None):
         if self.busy:
             self.notice("Wait for the current PDF operation to finish.")
             return
         if tool == TOOLS[4]:
-            self.show_panel(self.editor_view)
+            self.show_tool_page(self.editor_view)
         else:
             if self.workspace.mode != tool:
                 self.workspace.configure(tool)
             self.workspace.dpi.setValue(self.prefs.value("dpi", 200, type=int))
             self.workspace.quality.setValue(self.prefs.value("quality", 90, type=int))
-            self.show_panel(self.workspace)
+            self.show_tool_page(self.workspace)
         self.translate()
+        self.refresh_navigation()
         if files:
             self.accept_files(files)
 
     def browse(self):
-        home = self.stack.currentWidget() == self.home
-        kind = "PDF and images (*.pdf *.jpg *.jpeg *.png)" if home else "PDF files (*.pdf)"
-        names, _ = QFileDialog.getOpenFileNames(self, tr(self, "Choose files"), "", tr(self, kind))
+        panel = self.active_panel()
+        single = panel is self.editor_view or (
+            panel is self.workspace and self.workspace.mode == TOOLS[1]
+        )
+        kind = (
+            "PDF and images (*.pdf *.jpg *.jpeg *.png)"
+            if panel is self.home
+            else "PDF files (*.pdf)"
+        )
+        if single:
+            name, _ = QFileDialog.getOpenFileName(
+                self, tr(self, "Choose files"), "", tr(self, kind)
+            )
+            names = [name] if name else []
+        else:
+            names, _ = QFileDialog.getOpenFileNames(
+                self, tr(self, "Choose files"), "", tr(self, kind)
+            )
         if names:
             self.accept_files([Path(name) for name in names])
 
     def paste(self):
+        data = QApplication.clipboard().mimeData()
+        if data is None:
+            return
+        files = local_paths(data)
+        if files and self.stack.currentWidget() == self.home:
+            self.accept_files(files)
+            return
         focused = QApplication.focusWidget()
         if isinstance(focused, (QLineEdit, QTextEdit)):
             focused.paste()
             return
-        data = QApplication.clipboard().mimeData()
-        if data is None:
-            return
-        if self.stack.currentWidget() == self.editor_view:
+        if self.active_panel() is self.editor_view:
             self.editor.paste(data)
-        else:
-            self.accept_files(local_paths(data))
+        elif files:
+            self.accept_files(files)
+
+    def eventFilter(self, watched, event):
+        # QLineEdit normally reserves Paste for itself, including when Explorer copied files.
+        if (
+            watched is self.search
+            and event.type() in (QEvent.Type.ShortcutOverride, QEvent.Type.KeyPress)
+            and event.matches(QKeySequence.StandardKey.Paste)
+        ):
+            data = QApplication.clipboard().mimeData()
+            if data is not None and local_paths(data):
+                event.accept()
+                if event.type() == QEvent.Type.KeyPress:
+                    self.paste()
+                return True
+        return super().eventFilter(watched, event)
 
     def browse_range(self):
         selected, _ = QFileDialog.getOpenFileName(
@@ -349,7 +665,7 @@ class Window(QMainWindow):
         paths = [path for path in dict.fromkeys(files) if safe_local(path)]
         pdfs = [path for path in paths if path.suffix.lower() == ".pdf"]
         images = [path for path in paths if path.suffix.lower() in IMAGE_TYPES]
-        current = self.stack.currentWidget()
+        current = self.active_panel()
         if current == self.home and (pdfs or images):
             self.suggest(pdfs, images)
             return
@@ -386,13 +702,19 @@ class Window(QMainWindow):
                     lambda: self.load_files([Path(selected)], self.editor_view, images=images)
                 )
             return
-        menu = QMenu(self)
-        choices = (TOOLS[0], TOOLS[3]) if len(pdfs) > 1 else TOOLS
+        menu = self.suggestion_menu
+        menu.clear()
+        choices = (TOOLS[0], TOOLS[3], ORGANIZE) if len(pdfs) > 1 else TOOLS
         for choice in choices:
-            menu.addAction(
-                tr(self, choice), lambda tool=choice: self.open_suggestion(tool, pdfs, images)
+            icon = tool_icon(NAV_ICONS[choice], self.theme_palette["primary"])
+            action = menu.addAction(icon, tr(self, choice))
+            describe_button(action, self, choice)
+            action.triggered.connect(
+                lambda _checked, tool=choice: QTimer.singleShot(
+                    0, self, lambda: self.open_suggestion(tool, pdfs, images)
+                )
             )
-        menu.exec(self.stack.mapToGlobal(self.stack.rect().center()))
+        menu.popup(self.drop.mapToGlobal(self.drop.rect().center()))
 
     def open_suggestion(self, tool, pdfs, images):
         self.select_tool(tool)
@@ -474,6 +796,8 @@ class Window(QMainWindow):
         name = self.editor.references[0].path.name if self.editor.references else ""
         status = tr(self, "Unsaved changes")
         self.editor_label.setText(f"{name}  •  {status}" if self.editor.dirty else name)
+        if self.active_panel() is self.editor_view:
+            self.show_tool_page(self.editor_view)
 
     def save_current(self):
         panel = self.stack.currentWidget()
@@ -570,22 +894,21 @@ class Window(QMainWindow):
     def run_job(self, work, label, done):
         if self.busy:
             return
-        self.stack.setEnabled(False)
         self.notice(label, 0)
-        self.progress.setRange(0, 0)
-        self.progress.show()
-        self.cancel.show()
+        dialog = ProcessingDialog(self, label, self.drop.mascot.pixmap, self.theme_palette)
+        dialog.cancel_requested.connect(self.cancel_work)
+        self.processing = dialog
 
         def finish(value, error):
             self.busy = None
-            self.stack.setEnabled(True)
+            self.processing = None
+            dialog.done(0)
+            dialog.deleteLater()
             self.statusBar().clearMessage()
-            if not self.update_running:
-                self.progress.hide()
-                self.cancel.hide()
             done(value, error)
 
-        self.busy = self.jobs.submit(work, finish, self.progress_value)
+        self.busy = self.jobs.submit(work, finish, dialog.report)
+        dialog.open()
 
     def progress_value(self, current, total):
         self.progress.setRange(0, 100)
@@ -782,6 +1105,7 @@ class Window(QMainWindow):
         later = box.addButton(tr(self, "Later"), QMessageBox.ButtonRole.RejectRole)
         skip = box.addButton(tr(self, "Skip this version"), QMessageBox.ButtonRole.ActionRole)
         box.setDefaultButton(later)
+        describe_buttons(box, self)
         box.exec()
         if box.clickedButton() == skip:
             self.prefs.setValue("skipped", details.version)
@@ -936,6 +1260,8 @@ def main():
     window.show()
     if smoke:
         window.update_timer.stop()
+        if window.drop.mascot.pixmap.isNull():
+            raise RuntimeError("Packaged mascot artwork could not be loaded")
         verify_bundled_runtime()
         QTimer.singleShot(600, window.close)
     return app.exec()

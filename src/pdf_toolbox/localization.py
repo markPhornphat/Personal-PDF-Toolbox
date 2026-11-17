@@ -2,7 +2,7 @@
 
 import re
 
-from PySide6.QtCore import QSignalBlocker
+from PySide6.QtCore import QSignalBlocker, Qt
 from PySide6.QtWidgets import (
     QAbstractButton,
     QComboBox,
@@ -14,18 +14,37 @@ from PySide6.QtWidgets import (
 )
 
 THAI = {
+    "Drop a file to\nget started": "วางไฟล์\nเพื่อเริ่มต้น",
+    "PDF, JPG or PNG. Paste files with Ctrl+V.": "PDF, JPG หรือ PNG วางไฟล์ที่คัดลอกด้วย Ctrl+V",
+    "Dog with an ice cream cone": "น้องหมากับไอศกรีมโคน",
+    "PDF tools": "เครื่องมือ PDF",
+    "No tools match your search.": "ไม่พบเครื่องมือที่ตรงกับการค้นหา",
+    "Preferences": "ค่ากำหนด",
+    "Documents": "เอกสาร",
+    "Pages": "หน้าเอกสาร",
+    "Move up": "เลื่อนขึ้น",
+    "Move down": "เลื่อนลง",
     "Home": "หน้าหลัก",
     "Settings": "การตั้งค่า",
     "About": "เกี่ยวกับ",
     "Merge / Append": "รวมไฟล์ PDF",
     "Split PDF": "แยกไฟล์ PDF",
     "Remove / Extract": "ลบหรือดึงหน้า",
-    "PDF to JPG / PNG": "แปลง PDF เป็น JPG / PNG",
+    "PDF to JPG / PNG": "PDF เป็น JPG / PNG",
     "Edit PDF": "แก้ไข PDF",
+    "Organize PDF": "จัดระเบียบ PDF",
+    "Reorder, rotate and insert pages": "จัดลำดับ หมุน และแทรกหน้า",
+    "Drag to reorder pages, rotate selections, or insert a blank page.": "ลากเพื่อจัดลำดับหน้า หมุนหน้าที่เลือก หรือแทรกหน้าว่าง",
+    "Rotate left": "หมุนซ้าย",
+    "Rotate right": "หมุนขวา",
+    "Blank page": "หน้าว่าง",
+    "Reverse order": "กลับลำดับหน้า",
     "Browse files…": "เลือกไฟล์…",
     "Add PDFs…": "เพิ่มไฟล์ PDF…",
     "Add a page range…": "เพิ่มช่วงหน้า…",
     "Drop PDF, JPG or PNG files here": "วางไฟล์ PDF, JPG หรือ PNG ที่นี่",
+    "Drop a PDF here": "วางไฟล์ PDF หนึ่งไฟล์ที่นี่",
+    "Drop one or more PDFs here": "วางไฟล์ PDF หนึ่งไฟล์ขึ้นไปที่นี่",
     "Select files, or paste copied files with Ctrl+V.": "เลือกไฟล์ หรือวางไฟล์ที่คัดลอกด้วย Ctrl+V",
     "Search tools": "ค้นหาเครื่องมือ",
     "All tools": "เครื่องมือทั้งหมด",
@@ -94,7 +113,7 @@ THAI = {
     "{pages} pages · {size}": "{pages} หน้า · {size}",
     "{count} remaining": "เหลือ {count} หน้า",
     "{count} output files": "ไฟล์ที่จะส่งออก {count} ไฟล์",
-    "▼ Split after": "▼ แยกหลังหน้านี้",
+    "Split after": "แยกหลังหน้านี้",
     "Preview ≈ {width} × {height} px": "ขนาดภาพโดยประมาณ {width} × {height} พิกเซล",
     "Select": "เลือก",
     "Text": "ข้อความ",
@@ -257,6 +276,7 @@ THAI = {
     "Private updates need a GitHub credential in Settings.": "อัปเดตจากคลังส่วนตัวต้องใช้โทเค็น GitHub ในการตั้งค่า",
     "GitHub’s update check limit was reached. Try again later.": "ตรวจสอบอัปเดตถึงขีดจำกัดของ GitHub แล้ว ลองใหม่ภายหลัง",
     "The release is unavailable. Check the repository and credential.": "เข้าถึงรุ่นเผยแพร่ไม่ได้ ตรวจสอบคลังและโทเค็น",
+    "No public update release was found.": "ไม่พบอัปเดตที่เผยแพร่สาธารณะ",
     "GitHub could not serve this update. Try again later.": "GitHub ไม่สามารถส่งอัปเดตนี้ได้ ลองใหม่ภายหลัง",
     "GitHub could not be reached. Try again when online.": "ติดต่อ GitHub ไม่ได้ ลองใหม่เมื่อเชื่อมต่ออินเทอร์เน็ต",
     "GitHub returned unexpectedly large release information.": "ข้อมูลรุ่นเผยแพร่จาก GitHub มีขนาดใหญ่เกินคาด",
@@ -267,6 +287,121 @@ THAI = {
     "Windows Credential Manager could not read the update token.": "ตัวจัดการข้อมูลประจำตัวของ Windows อ่านโทเค็นอัปเดตไม่ได้",
     "Windows Credential Manager could not save the change.": "ตัวจัดการข้อมูลประจำตัวของ Windows บันทึกการเปลี่ยนแปลงไม่ได้",
 }
+
+BUTTON_HELP = {
+    "Home": ("Open the PDF tools dashboard.", "เปิดหน้ารวมเครื่องมือ PDF"),
+    "Settings": ("Open app preferences and update settings.", "เปิดค่ากำหนดและการตั้งค่าการอัปเดต"),
+    "About": ("View the app version, guide, and licenses.", "ดูเวอร์ชัน คู่มือ และสัญญาอนุญาต"),
+    "Theme": ("Choose the app appearance.", "เลือกรูปแบบสีของแอป"),
+    "System": ("Match the Windows appearance.", "ใช้รูปแบบสีตาม Windows"),
+    "Light": ("Use the light theme.", "ใช้ธีมสว่าง"),
+    "Dark": ("Use the dark theme.", "ใช้ธีมมืด"),
+    "Merge / Append": ("Combine PDFs and arrange their pages.", "รวมไฟล์ PDF และจัดลำดับหน้า"),
+    "Split PDF": ("Divide one PDF into separate files.", "แยก PDF หนึ่งไฟล์ออกเป็นหลายไฟล์"),
+    "Remove / Extract": ("Remove, keep, or export selected pages.", "ลบ เก็บ หรือส่งออกหน้าที่เลือก"),
+    "PDF to JPG / PNG": (
+        "Convert PDF pages to JPG or PNG images.",
+        "แปลงหน้า PDF เป็นรูปภาพ JPG หรือ PNG",
+    ),
+    "Edit PDF": ("Add text, pictures, or shapes to a PDF.", "เพิ่มข้อความ รูปภาพ หรือรูปร่างใน PDF"),
+    "Organize PDF": ("Arrange, rotate, and insert PDF pages.", "จัดลำดับ หมุน และแทรกหน้า PDF"),
+    "Rotate left": (
+        "Rotate selected pages 90° counterclockwise.",
+        "หมุนหน้าที่เลือกทวนเข็มนาฬิกา 90 องศา",
+    ),
+    "Rotate right": ("Rotate selected pages 90° clockwise.", "หมุนหน้าที่เลือกตามเข็มนาฬิกา 90 องศา"),
+    "Blank page": ("Insert a blank A4 page after the current page.", "แทรกหน้าว่าง A4 หลังหน้าปัจจุบัน"),
+    "Reverse order": ("Reverse the order of all pages.", "กลับลำดับหน้าทั้งหมด"),
+    "Browse files…": ("Choose files from your computer.", "เลือกไฟล์จากคอมพิวเตอร์"),
+    "Add PDFs…": ("Add PDFs to this workspace.", "เพิ่มไฟล์ PDF ในเครื่องมือนี้"),
+    "Add a page range…": ("Insert selected pages from another PDF.", "แทรกหน้าที่เลือกจาก PDF อีกไฟล์"),
+    "Export…": ("Choose where to save the result.", "เลือกตำแหน่งบันทึกผลลัพธ์"),
+    "Export as ZIP": ("Pack the output files into one ZIP archive.", "รวมไฟล์ผลลัพธ์ไว้ในไฟล์ ZIP เดียว"),
+    "Transparent PNG": ("Keep transparent areas in PNG output.", "คงพื้นที่โปร่งใสในไฟล์ PNG"),
+    "Move up": ("Move the selected pages earlier in the document.", "เลื่อนหน้าที่เลือกให้มาก่อน"),
+    "Move down": ("Move the selected pages later in the document.", "เลื่อนหน้าที่เลือกไปด้านหลัง"),
+    "Duplicate": ("Make a copy of the selection.", "ทำสำเนาสิ่งที่เลือก"),
+    "Remove": ("Remove selected pages from this workspace.", "นำหน้าที่เลือกออกจากเครื่องมือนี้"),
+    "Invert": ("Select the pages that are currently unselected.", "สลับให้เลือกหน้าที่ยังไม่ได้เลือก"),
+    "Undo": ("Reverse the last change.", "ย้อนการเปลี่ยนแปลงล่าสุด"),
+    "Redo": ("Restore the last change you undid.", "ทำการเปลี่ยนแปลงที่เพิ่งย้อนกลับอีกครั้ง"),
+    "Split here": ("Start a new output file after the current page.", "เริ่มไฟล์ผลลัพธ์ใหม่หลังหน้าปัจจุบัน"),
+    "Use range": ("Select pages using the entered page range.", "เลือกหน้าตามช่วงที่ระบุ"),
+    "Previous": ("Show the previous page.", "แสดงหน้าก่อนหน้า"),
+    "Next": ("Show the next page.", "แสดงหน้าถัดไป"),
+    "−": ("Zoom out on the page preview.", "ย่อมุมมองหน้า"),
+    "+": ("Zoom in on the page preview.", "ขยายมุมมองหน้า"),
+    "Fit page": ("Show the whole page in the preview.", "แสดงทั้งหน้าในพื้นที่แสดงตัวอย่าง"),
+    "Fit width": (
+        "Fit the page to the width of the preview.",
+        "ปรับหน้าให้พอดีกับความกว้างของพื้นที่แสดงตัวอย่าง",
+    ),
+    "Pan": ("Toggle dragging to move around the preview.", "เปิดหรือปิดการลากเพื่อเลื่อนมุมมอง"),
+    "Insert image": ("Choose an image to place on the current page.", "เลือกรูปภาพเพื่อวางบนหน้าปัจจุบัน"),
+    "Delete": ("Delete the selected objects.", "ลบวัตถุที่เลือก"),
+    "Save": ("Save the edited PDF.", "บันทึก PDF ที่แก้ไขแล้ว"),
+    "Save as…": ("Choose a filename for the edited PDF.", "ตั้งชื่อไฟล์ PDF ที่แก้ไขแล้ว"),
+    "Bold": ("Toggle bold for the selected text.", "เปิดหรือปิดตัวหนาสำหรับข้อความที่เลือก"),
+    "Italic": ("Toggle italics for the selected text.", "เปิดหรือปิดตัวเอียงสำหรับข้อความที่เลือก"),
+    "Underline": ("Underline the selected text.", "ขีดเส้นใต้ข้อความที่เลือก"),
+    "Lock aspect ratio": (
+        "Keep the object's proportions when resizing.",
+        "คงสัดส่วนของวัตถุเมื่อปรับขนาด",
+    ),
+    "Text / border color": ("Choose a text or outline color.", "เลือกสีข้อความหรือเส้นขอบ"),
+    "Fill color": ("Choose a color for the inside of the shape.", "เลือกสีภายในรูปร่าง"),
+    "Choose folder…": ("Set the default folder for exports.", "ตั้งค่าโฟลเดอร์เริ่มต้นสำหรับส่งออก"),
+    "Clear preview cache": ("Clear cached page thumbnails.", "ล้างภาพขนาดย่อของหน้าที่เก็บไว้"),
+    "Reset preferences": ("Restore the default app preferences.", "คืนค่ากำหนดเริ่มต้นของแอป"),
+    "Check GitHub for updates in the background": (
+        "Let the app check for updates automatically.",
+        "ให้แอปตรวจสอบอัปเดตโดยอัตโนมัติ",
+    ),
+    "Check for updates": (
+        "Look for a newer signed release on GitHub.",
+        "ค้นหารุ่นใหม่ที่ลงลายเซ็นบน GitHub",
+    ),
+    "Manage GitHub credential…": (
+        "Save or remove the token for private updates.",
+        "บันทึกหรือลบโทเค็นสำหรับอัปเดตแบบส่วนตัว",
+    ),
+    "Update available": ("View details for the available update.", "ดูรายละเอียดการอัปเดตที่พร้อมใช้งาน"),
+    "Ready to install": ("Install the verified update.", "ติดตั้งอัปเดตที่ตรวจสอบแล้ว"),
+    "Update now": ("Download and verify the new installer.", "ดาวน์โหลดและตรวจสอบตัวติดตั้งใหม่"),
+    "Later": ("Dismiss this update for now.", "ปิดการแจ้งอัปเดตนี้ไว้ก่อน"),
+    "Skip this version": ("Skip update reminders for this version.", "ข้ามการแจ้งเตือนอัปเดตสำหรับรุ่นนี้"),
+    "Open folder": ("Show the exported files in File Explorer.", "แสดงไฟล์ที่ส่งออกใน File Explorer"),
+    "Open file": ("Open the exported file.", "เปิดไฟล์ที่ส่งออก"),
+    "Licenses": ("Read the bundled software licenses.", "อ่านสัญญาอนุญาตของซอฟต์แวร์ที่รวมมาด้วย"),
+    "User guide": ("Open the PDF Toolbox user guide.", "เปิดคู่มือการใช้ PDF Toolbox"),
+    "Cancel": ("Stop this action.", "หยุดการดำเนินการนี้"),
+    "OK": ("Confirm and continue.", "ยืนยันและดำเนินการต่อ"),
+    "Close": ("Close this dialog.", "ปิดหน้าต่างนี้"),
+    "Discard": ("Continue without saving the pending changes.", "ดำเนินการต่อโดยไม่บันทึกการเปลี่ยนแปลง"),
+    "Yes": ("Confirm this action.", "ยืนยันการดำเนินการนี้"),
+    "No": ("Decline this action.", "ปฏิเสธการดำเนินการนี้"),
+    "Copy": ("Copy the selected objects to the clipboard.", "คัดลอกวัตถุที่เลือกไปยังคลิปบอร์ด"),
+    "Cut": ("Move selected objects to the clipboard.", "ย้ายวัตถุที่เลือกไปยังคลิปบอร์ด"),
+    "Bring forward": ("Raise the selected objects one layer.", "เลื่อนวัตถุที่เลือกขึ้นหนึ่งชั้น"),
+    "Send backward": ("Lower the selected objects one layer.", "เลื่อนวัตถุที่เลือกลงหนึ่งชั้น"),
+    "Bring to front": ("Place the selection above all other objects.", "นำสิ่งที่เลือกไว้หน้าวัตถุอื่นทั้งหมด"),
+    "Send to back": ("Place the selection behind all other objects.", "นำสิ่งที่เลือกไว้หลังวัตถุอื่นทั้งหมด"),
+}
+BUTTON_LABELS = {THAI.get(label, label): label for label in BUTTON_HELP}
+
+
+def describe_button(button, context, label=None):
+    if isinstance(button, QAbstractButton):
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+    label = label or button.text() or button.accessibleName()
+    help_text = BUTTON_HELP.get(label) or BUTTON_HELP.get(BUTTON_LABELS.get(label, ""))
+    if help_text:
+        button.setToolTip(help_text[1 if thai_enabled(context) else 0])
+
+
+def describe_buttons(panel, context):
+    for button in panel.findChildren(QAbstractButton):
+        describe_button(button, context)
 
 
 def thai_enabled(widget):
@@ -336,6 +471,9 @@ def retranslate_controls(window):
     for widget in window.findChildren(QLabel) + window.findChildren(QAbstractButton):
         refresh(widget, widget.text, widget.setText, "translation_source")
         refresh(widget, widget.toolTip, widget.setToolTip, "translation_tooltip")
+        refresh(
+            widget, widget.accessibleName, widget.setAccessibleName, "translation_accessibility"
+        )
     for widget in window.findChildren(QLineEdit):
         refresh(widget, widget.placeholderText, widget.setPlaceholderText, "translation_hint")
     for widget in window.findChildren(QSpinBox):
@@ -356,6 +494,7 @@ def localize_buttons(box, *buttons):
     }
     for button in buttons:
         box.button(button).setText(tr(box.parentWidget(), captions[button]))
+    describe_buttons(box, box.parentWidget())
 
 
 def ask_text(parent, title, label, echo=QLineEdit.EchoMode.Normal):
@@ -365,5 +504,6 @@ def ask_text(parent, title, label, echo=QLineEdit.EchoMode.Normal):
     dialog.setTextEchoMode(echo)
     dialog.setOkButtonText(tr(parent, "OK"))
     dialog.setCancelButtonText(tr(parent, "Cancel"))
+    describe_buttons(dialog, parent)
     accepted = dialog.exec() == dialog.DialogCode.Accepted
     return dialog.textValue() if accepted else "", accepted

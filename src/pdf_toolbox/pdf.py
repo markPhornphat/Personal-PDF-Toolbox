@@ -36,6 +36,17 @@ class Page:
     path: Path
     index: int
     password: str = field(default="", repr=False)
+    rotation: int = 0
+
+
+@dataclass(frozen=True)
+class BlankPage:
+    width: int = 595
+    height: int = 842
+    rotation: int = 0
+
+
+PageReference = Page | BlankPage
 
 
 def safe_local(path: Path) -> bool:
@@ -126,11 +137,19 @@ def inspect(path: Path, password: str = "") -> int:
 
 
 @contextmanager
-def locked_page(reference: Page):
+def locked_page(reference: PageReference):
     with _PDFIUM:
-        document = pdfium.PdfDocument(reference.path, password=reference.password or None)
+        document = (
+            pdfium.PdfDocument.new()
+            if isinstance(reference, BlankPage)
+            else pdfium.PdfDocument(reference.path, password=reference.password or None)
+        )
         try:
-            page = document[reference.index]
+            page = (
+                document.new_page(reference.width, reference.height)
+                if isinstance(reference, BlankPage)
+                else document[reference.index]
+            )
             try:
                 yield page
             finally:
@@ -139,9 +158,10 @@ def locked_page(reference: Page):
             document.close()
 
 
-def page_size(reference: Page) -> tuple[float, float]:
+def page_size(reference: PageReference) -> tuple[float, float]:
     with locked_page(reference) as page:
-        return page.get_size()
+        width, height = page.get_size()
+    return (height, width) if reference.rotation % 180 else (width, height)
 
 
 def dimensions(reference: Page, dpi: int) -> tuple[int, int]:
@@ -150,7 +170,11 @@ def dimensions(reference: Page, dpi: int) -> tuple[int, int]:
 
 
 def render(
-    reference: Page, *, pixels: int | None = None, dpi: int = 200, transparent: bool = False
+    reference: PageReference,
+    *,
+    pixels: int | None = None,
+    dpi: int = 200,
+    transparent: bool = False,
 ) -> Image.Image:
     with locked_page(reference) as page:
         width, height = page.get_size()
@@ -161,6 +185,7 @@ def render(
             raise ValueError("The output image is too large. Choose a lower DPI.")
         bitmap = page.render(
             scale=scale,
+            rotation=reference.rotation,
             fill_color=(255, 255, 255, 0 if transparent else 255),
             force_bitmap_format=pdfium.raw.FPDFBitmap_BGRA if transparent else None,
         )
@@ -182,7 +207,7 @@ def convert(reference: Page, fmt: str, dpi: int, quality: int, transparent: bool
 
 
 def write_pdf(
-    pages: Sequence[Page],
+    pages: Sequence[PageReference],
     destination: Path,
     cancelled: Event | None = None,
     progress: Progress | None = None,
@@ -195,14 +220,19 @@ def write_pdf(
         readers = {}
         for index, reference in enumerate(pages):
             check_cancelled(cancelled)
-            key = reference.path, reference.password
-            if key not in readers:
-                stream = stack.enter_context(reference.path.open("rb"))
-                readers[key] = read_pdf(stream, reference.password)
-            reader = readers[key]
-            if overlays and index in overlays:
-                writer.reset_translation(reader)
-            output = writer.add_page(reader.pages[reference.index], excluded_keys=("/AA",))
+            if isinstance(reference, BlankPage):
+                output = writer.add_blank_page(reference.width, reference.height)
+            else:
+                key = reference.path, reference.password
+                if key not in readers:
+                    stream = stack.enter_context(reference.path.open("rb"))
+                    readers[key] = read_pdf(stream, reference.password)
+                reader = readers[key]
+                if overlays and index in overlays:
+                    writer.reset_translation(reader)
+                output = writer.add_page(reader.pages[reference.index], excluded_keys=("/AA",))
+            if reference.rotation:
+                output.rotate(reference.rotation)
             if overlays and index in overlays:
                 stamp = PdfReader(io.BytesIO(overlays[index]))
                 writer.pdf_header = max(writer.pdf_header, stamp.pdf_header)
@@ -278,7 +308,7 @@ def publish(
 
 
 def export(
-    pages: Iterable[Page],
+    pages: Iterable[PageReference],
     output: Path,
     *,
     cancelled: Event | None = None,

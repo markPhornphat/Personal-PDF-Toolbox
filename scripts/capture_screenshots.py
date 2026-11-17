@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from time import monotonic
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSettings, QTemporaryDir, Qt
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QApplication
 from pypdf import PdfWriter
@@ -32,7 +32,9 @@ def main():
     assert load_fonts(RESOURCE) >= 0
     output = ROOT / "artifacts" / "screenshots"
     output.mkdir(parents=True, exist_ok=True)
-    window = Window()
+    scratch = QTemporaryDir()
+    assert scratch.isValid()
+    window = Window(QSettings(scratch.filePath("settings.ini"), QSettings.Format.IniFormat))
     window.update_timer.stop()
     window.prefs.setValue("auto_updates", False)
     window.prefs.setValue("theme", "Light")
@@ -89,6 +91,9 @@ def main():
 
     window.select_tool(TOOLS[4], [source])
     wait(app, lambda: not window.busy and not window.editor.loading)
+    window.editor.thumbnails.fill()
+    wait(app, lambda: not window.thumbs.active)
+    window.editor.thumbnails.fill()
     window.editor.add(
         Object("Highlight", 26, 231, 152, 18, fill="#ffd94c", color="#ffd94c", opacity=0.42)
     )
@@ -101,6 +106,18 @@ def main():
     )
     app.processEvents()
     assert window.grab().save(str(output / "editor.png"))
+    window.resize(980, 650)
+    window.settings.language.setCurrentText("ไทย")
+    window.settings.theme.setCurrentText("Dark")
+    window.show_panel(window.home)
+    app.processEvents()
+    assert window.grab().save(str(output / "thai-dark-home.png"))
+    window.show_panel(window.settings)
+    app.processEvents()
+    assert window.grab().save(str(output / "thai-settings.png"))
+    window.show_panel(window.editor_view)
+    app.processEvents()
+    assert window.grab().save(str(output / "thai-dark-editor.png"))
     window.close_approved = True
     window.close()
     for path in (source, appendix):

@@ -1,7 +1,8 @@
 from collections import OrderedDict
 
-from PySide6.QtCore import QItemSelectionModel, QPoint, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QDrag, QIcon, QImage, QPainter, QPen, QPixmap
+from PySide6.QtCore import QEasingCurve, QItemSelectionModel, QPoint, QRect, QSize, Qt, QTimer
+from PySide6.QtCore import QVariantAnimation, Signal
+from PySide6.QtGui import QColor, QDrag, QIcon, QImage, QPainter, QPalette, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QGraphicsPixmapItem,
@@ -12,12 +13,16 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QStyle,
+    QStyleOptionViewItem,
+    QStyledItemDelegate,
     QVBoxLayout,
     QWidget,
 )
 
+from .appearance import icon_button, motion_enabled
 from .localization import tr
-from .pdf import check_cancelled, page_size, render
+from .pdf import BlankPage, check_cancelled, page_size, render
 
 
 def preview(page, pixels):
@@ -25,6 +30,54 @@ def preview(page, pixels):
     return QImage(
         image.tobytes(), image.width, image.height, image.width * 3, QImage.Format.Format_RGB888
     ).copy(), page_size(page)
+
+
+class ThumbnailCard(QStyledItemDelegate):
+    def sizeHint(self, _option, _index):
+        return self.parent().gridSize() - QSize(8, 8)
+
+    def paint(self, painter, option, index):
+        option = QStyleOptionViewItem(option)
+        self.initStyleOption(option, index)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        box = option.rect.adjusted(2, 2, -2, -2)
+        selected = bool(option.state & QStyle.StateFlag.State_Selected)
+        palette = option.palette
+        marker = option.backgroundBrush.style() != Qt.BrushStyle.NoBrush
+        painter.setPen(
+            QPen(QColor("#956b94"), 2) if marker else palette.color(QPalette.ColorRole.Midlight)
+        )
+        painter.setBrush(
+            palette.color(QPalette.ColorRole.Highlight if selected else QPalette.ColorRole.Base)
+        )
+        painter.drawRoundedRect(box, 9, 9)
+
+        lines = index.data(Qt.ItemDataRole.DisplayRole).split("\n")
+        line_height = option.fontMetrics.height()
+        caption_y = box.bottom() - 9 - (line_height + 2) * len(lines)
+        icon_area = QRect(
+            box.left() + 7, box.top() + 6, box.width() - 14, max(0, caption_y - box.top() - 10)
+        )
+        icon_size = option.icon.actualSize(self.parent().iconSize().boundedTo(icon_area.size()))
+        icon_rect = QRect(QPoint(), icon_size)
+        icon_rect.moveCenter(icon_area.center())
+        option.icon.paint(painter, icon_rect)
+        painter.setFont(option.font)
+        painter.setPen(
+            palette.color(
+                QPalette.ColorRole.HighlightedText if selected else QPalette.ColorRole.Text
+            )
+        )
+        for row, line in enumerate(lines):
+            caption = option.fontMetrics.elidedText(
+                line, Qt.TextElideMode.ElideMiddle, box.width() - 12
+            )
+            rect = QRect(
+                box.left() + 6, caption_y + row * (line_height + 2), box.width() - 12, line_height
+            )
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, caption)
+        painter.restore()
 
 
 class PageList(QListWidget):
@@ -41,6 +94,8 @@ class PageList(QListWidget):
         self.setTextElideMode(Qt.TextElideMode.ElideMiddle)
         self.setUniformItemSizes(True)
         self.setSpacing(6)
+        self.setItemDelegate(ThumbnailCard(self))
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.drop_mark = None
         if reorder:
             self.setMovement(QListWidget.Movement.Snap)
@@ -87,7 +142,7 @@ class PageList(QListWidget):
         super().paintEvent(event)
         if self.drop_mark is not None:
             painter = QPainter(self.viewport())
-            painter.setPen(QPen(QColor("#177aef"), 3))
+            painter.setPen(QPen(QColor("#956b94"), 3))
             painter.drawLine(self.drop_mark - QPoint(0, 25), self.drop_mark + QPoint(0, 25))
             painter.end()
 
@@ -139,6 +194,12 @@ class Viewer(QWidget):
         self.image = QGraphicsPixmapItem()
         self.image.setZValue(-1000)
         self.scene.addItem(self.image)
+        self.reveal = QVariantAnimation(self)
+        self.reveal.setDuration(130)
+        self.reveal.setStartValue(0.78)
+        self.reveal.setEndValue(1.0)
+        self.reveal.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.reveal.valueChanged.connect(self.image.setOpacity)
         self.counter = QLabel("No page selected")
         self.status = QLabel()
         self.page = None
@@ -152,23 +213,25 @@ class Viewer(QWidget):
 
         layout = QVBoxLayout(self)
         tools = QHBoxLayout()
-        for title, slot in [
-            ("Previous", lambda: self.on_previous()),
-            ("Next", lambda: self.on_next()),
-            ("−", lambda: self.zoom(0.8)),
-            ("+", lambda: self.zoom(1.25)),
-            ("Fit page", lambda: self.fit("page")),
-            ("Fit width", lambda: self.fit("width")),
-            ("Pan", self.pan),
+        for title, slot, icon in [
+            ("Previous", lambda: self.on_previous(), "previous"),
+            ("Next", lambda: self.on_next(), "next"),
+            ("−", lambda: self.zoom(0.8), None),
+            ("+", lambda: self.zoom(1.25), None),
+            ("Fit page", lambda: self.fit("page"), "fit-page"),
+            ("Fit width", lambda: self.fit("width"), "fit-width"),
+            ("Pan", self.pan, "pan"),
         ]:
-            button = QPushButton(title)
+            button = icon_button(icon, title) if icon else QPushButton(title)
             button.clicked.connect(slot)
             tools.addWidget(button)
-        tools.addWidget(self.counter)
         tools.addStretch()
         layout.addLayout(tools)
         layout.addWidget(self.view)
-        layout.addWidget(self.status)
+        footer = QHBoxLayout()
+        footer.addWidget(self.counter)
+        footer.addWidget(self.status, 1)
+        layout.addLayout(footer)
 
     def load(self, page, index, count):
         if self.rendering:
@@ -177,6 +240,8 @@ class Viewer(QWidget):
         generation = self.generation
         self.page = page
         self.index, self.count = index, count
+        self.reveal.stop()
+        self.image.setOpacity(1.0)
         self.image.setPixmap(QPixmap())
         self.set_status("Rendering page…" if page else "")
         self.retranslate()
@@ -195,6 +260,9 @@ class Viewer(QWidget):
             self.scene.setSceneRect(0, 0, width, height)
             self.set_status("")
             self.fit(self.fit_mode)
+            if self.isVisible() and motion_enabled(self):
+                self.image.setOpacity(0.78)
+                self.reveal.start()
             self.shown.emit(page, (width, height))
 
         def work(cancelled, _):
@@ -281,7 +349,9 @@ class Thumbnails:
         for item in visible:
             page = item.data(Qt.ItemDataRole.UserRole)
             if page in self.cache:
-                item.setIcon(self.cache[page])
+                icon = self.cache[page]
+                if item.icon().cacheKey() != icon.cacheKey():
+                    item.setIcon(icon)
                 self.cache.move_to_end(page)
             elif page not in self.pending and len(self.pending) < 4:
                 self.pending.add(page)
@@ -305,12 +375,17 @@ class Thumbnails:
 
 def translate_page_item(item, widget, *, split=False):
     page = item.data(Qt.ItemDataRole.UserRole)
-    caption = tr(widget, "Page {page}", page=page.index + 1)
-    title = f"{page.path.stem}\n{caption}"
+    if isinstance(page, BlankPage):
+        name = tr(widget, "Blank page")
+        caption = "A4"
+    else:
+        name = page.path.name
+        caption = tr(widget, "Page {page}", page=page.index + 1)
+    title = f"{name}\n{caption}"
     if split:
-        title += "\n" + tr(widget, "▼ Split after")
+        title += "\n" + tr(widget, "Split after")
     item.setText(title)
-    item.setToolTip(f"{page.path.name} · {caption}")
+    item.setToolTip(f"{name} · {caption}")
 
 
 def page_item(page, widget):

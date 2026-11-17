@@ -2,7 +2,7 @@
 
 PDF Toolbox is a local Windows x64 desktop application for combining, splitting, extracting, converting and visually editing PDF pages.
 
-![PDF Toolbox editor](docs/screenshots/editor.png)
+![PDF Toolbox home](docs/screenshots/dashboard.png)
 
 Open [the user guide](USER_GUIDE.md) for installation and usage. See [the feature matrix](FEATURE_MATRIX.md) and [test report](TEST_REPORT.md) for current verification status.
 

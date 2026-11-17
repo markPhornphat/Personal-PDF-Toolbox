@@ -1,4 +1,5 @@
 from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QItemSelectionModel, QSize, Qt, Signal
@@ -8,7 +9,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QPushButton,
     QSpinBox,
     QSplitter,
     QListWidgetItem,
@@ -16,17 +16,28 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .appearance import action_button, icon_button
 from .localization import Choice, tr
-from .pdf import Page, convert, export, page_range, publish, split_groups, write_pdf
+from .pdf import BlankPage, Page, PageReference, convert, export, page_range, publish, split_groups
+from .pdf import write_pdf
 from .viewer import PageList, Thumbnails, Viewer, page_item, translate_page_item
 
-TOOLS = ("Merge / Append", "Split PDF", "Remove / Extract", "PDF to JPG / PNG", "Edit PDF")
+ORGANIZE = "Organize PDF"
+TOOLS = (
+    "Merge / Append",
+    "Split PDF",
+    "Remove / Extract",
+    "PDF to JPG / PNG",
+    "Edit PDF",
+    ORGANIZE,
+)
 
 
 class Workspace(QWidget):
     browse = Signal()
     browse_range = Signal()
     add_files = Signal(list)
+    pages_changed = Signal()
     run_requested = Signal()
     failed = Signal(str)
 
@@ -34,16 +45,16 @@ class Workspace(QWidget):
         super().__init__()
         self.mode = TOOLS[0]
         self.jobs = jobs
-        self.history: list[list[Page]] = [[]]
+        self.history: list[list[PageReference]] = [[]]
         self.cursor = 0
         self.refreshing = False
         self.listing = PageList()
         self.listing.setMinimumWidth(245)
         self.thumbnails = Thumbnails(self.listing, thumbs)
         self.documents = PageList()
-        self.documents.setMaximumHeight(116)
-        self.documents.setGridSize(QSize(162, 96))
-        self.documents.setIconSize(QSize(51, 63))
+        self.documents.setFixedHeight(113)
+        self.documents.setGridSize(QSize(139, 104))
+        self.documents.setIconSize(QSize(40, 51))
         self.documents.setSelectionMode(self.documents.SelectionMode.SingleSelection)
         self.document_previews = Thumbnails(self.documents, thumbs)
         self.documents.reordered.connect(self.reorder_documents)
@@ -102,8 +113,7 @@ class Workspace(QWidget):
         self.action.currentIndexChanged.connect(self.summarize)
         self.position = Choice()
         self.position.addItems(["Append at end", "Insert before current page"])
-        self.export_button = QPushButton("Export…")
-        self.export_button.setProperty("primary", True)
+        self.export_button = action_button("export", "Export…", primary=True)
         self.export_button.clicked.connect(self.run_requested)
 
         outer = QVBoxLayout(self)
@@ -112,39 +122,57 @@ class Workspace(QWidget):
         self.title.setObjectName("Heading")
         top.addWidget(self.title)
         top.addStretch()
-        self.button(top, "Add PDFs…", self.browse.emit)
-        self.insert_range = self.button(top, "Add a page range…", self.browse_range.emit)
+        self.button(top, "Add PDFs…", self.browse.emit, "folder")
+        self.insert_range = self.button(top, "Add a page range…", self.browse_range.emit, "range")
         outer.addLayout(top)
         outer.addWidget(self.subtitle)
 
         split = QSplitter()
         left = QWidget()
         left_layout = QVBoxLayout(left)
+        self.documents_heading = QLabel("Documents")
+        self.documents_heading.setObjectName("Section")
+        left_layout.addWidget(self.documents_heading)
         left_layout.addWidget(self.documents)
+        pages_heading = QLabel("Pages")
+        pages_heading.setObjectName("Section")
+        left_layout.addWidget(pages_heading)
         left_layout.addWidget(self.listing)
         rows = QHBoxLayout()
-        for label, callback in [
-            ("↑", lambda: self.move(-1)),
-            ("↓", lambda: self.move(1)),
-            ("Duplicate", self.duplicate),
-            ("Remove", self.remove),
+        for label, callback, icon in [
+            ("Move up", lambda: self.move(-1), "up"),
+            ("Move down", lambda: self.move(1), "down"),
+            ("Duplicate", self.duplicate, "merge"),
+            ("Remove", self.remove, "delete"),
         ]:
-            self.button(rows, label, callback)
+            self.button(rows, label, callback, icon, compact=icon in {"up", "down"})
         left_layout.addLayout(rows)
         rows = QHBoxLayout()
-        for label, callback in [
-            ("Invert", self.invert),
-            ("Undo", self.undo),
-            ("Redo", self.redo),
-            ("Split here", self.add_boundary),
-            ("Use range", self.select_range),
+        for label, callback, icon in [
+            ("Invert", self.invert, "invert"),
+            ("Undo", self.undo, "undo"),
+            ("Redo", self.redo, "redo"),
+            ("Split here", self.add_boundary, "split"),
+            ("Use range", self.select_range, "range"),
         ]:
-            button = self.button(rows, label, callback)
+            button = self.button(rows, label, callback, icon, compact=icon in {"undo", "redo"})
             if label == "Split here":
                 self.mark = button
             if label == "Use range":
                 self.pick_range = button
         left_layout.addLayout(rows)
+        self.organize_toolbar = QWidget()
+        actions = QHBoxLayout(self.organize_toolbar)
+        actions.setContentsMargins(0, 0, 0, 0)
+        for label, callback, icon in [
+            ("Rotate left", lambda: self.rotate_pages(-90), "rotate-left"),
+            ("Rotate right", lambda: self.rotate_pages(90), "rotate-right"),
+            ("Blank page", self.insert_blank, "blank"),
+            ("Reverse order", self.reverse_order, "reverse"),
+        ]:
+            self.button(actions, label, callback, icon, compact=icon.startswith("rotate"))
+        actions.addStretch()
+        left_layout.addWidget(self.organize_toolbar)
         split.addWidget(left)
         split.addWidget(self.viewer)
         split.setSizes([400, 700])
@@ -170,8 +198,8 @@ class Workspace(QWidget):
         self.configure(self.mode)
 
     @staticmethod
-    def button(layout, label, callback):
-        button = QPushButton(label)
+    def button(layout, label, callback, icon, *, compact=False):
+        button = icon_button(icon, label) if compact else action_button(icon, label)
         button.clicked.connect(callback)
         layout.addWidget(button)
         return button
@@ -189,11 +217,14 @@ class Workspace(QWidget):
                 TOOLS[1]: "Drop a PDF and choose how to divide it into separate files.",
                 TOOLS[2]: "Select pages to remove or extract. Drag pages to change their order.",
                 TOOLS[3]: "Drop PDFs, select pages, and choose an image format and resolution.",
+                ORGANIZE: "Drag to reorder pages, rotate selections, or insert a blank page.",
             }[mode]
         )
-        self.position.setVisible(mode in {TOOLS[0], TOOLS[2]})
+        self.position.setVisible(mode in {TOOLS[0], TOOLS[2], ORGANIZE})
         self.documents.setVisible(mode == TOOLS[0])
-        self.insert_range.setVisible(mode == TOOLS[0])
+        self.documents_heading.setVisible(mode == TOOLS[0])
+        self.insert_range.setVisible(mode in {TOOLS[0], ORGANIZE})
+        self.organize_toolbar.setVisible(mode == ORGANIZE)
         self.action.setVisible(mode == TOOLS[2])
         for control in [self.groups, self.mark]:
             control.setVisible(mode == TOOLS[1])
@@ -259,6 +290,7 @@ class Workspace(QWidget):
         else:
             self.viewer.load(None, 0, 0)
         self.summarize()
+        self.pages_changed.emit()
 
     def order_changed(self, *_):
         if not self.refreshing:
@@ -291,7 +323,7 @@ class Workspace(QWidget):
         size = tr(self, item.data(Qt.ItemDataRole.UserRole + 1))
         meta = tr(self, "{pages} pages · {size}", pages=count, size=size)
         hint = tr(self, "Double-click to jump to its first page.")
-        item.setText(f"{reference.path.stem}\n{meta}")
+        item.setText(f"{reference.path.name}\n{meta}")
         item.setToolTip(f"{reference.path.name}\n{hint}")
 
     def retranslate(self):
@@ -372,6 +404,30 @@ class Workspace(QWidget):
             self.remember(pages)
             self.rebuild(row + delta)
 
+    def rotate_pages(self, degrees):
+        row = self.listing.currentRow()
+        selected = self.selected() or ([row] if row >= 0 else [])
+        pages = self.pages()
+        for index in selected:
+            page = pages[index]
+            pages[index] = replace(page, rotation=(page.rotation + degrees) % 360)
+        self.remember(pages)
+        self.rebuild(row if row >= 0 else 0)
+        for index in selected:
+            self.listing.item(index).setSelected(True)
+
+    def insert_blank(self):
+        pages = self.pages()
+        row = self.listing.currentRow() + 1
+        pages.insert(row, BlankPage())
+        self.remember(pages)
+        self.rebuild(row)
+
+    def reverse_order(self):
+        pages = self.pages()
+        self.remember(pages[::-1])
+        self.rebuild()
+
     def add_boundary(self):
         row = self.listing.currentRow()
         if not 0 <= row < self.listing.count() - 1:
@@ -409,7 +465,7 @@ class Workspace(QWidget):
             else "Page range, e.g. 1-3,5"
         )
         self.range.setPlaceholderText(tr(self, hint))
-        documents = Counter(page.path for page in self.pages())
+        documents = Counter(page.path for page in self.pages() if isinstance(page, Page))
         details = [
             tr(
                 self,

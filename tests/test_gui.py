@@ -4,13 +4,30 @@ from pathlib import Path
 import pytest
 from PySide6.QtCore import QMimeData, QPointF, QSettings, Qt, QTimer, QUrl
 from PySide6.QtGui import QColor, QDropEvent, QImage
-from PySide6.QtWidgets import QApplication, QCheckBox, QLabel, QMessageBox, QPushButton
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QFileDialog,
+    QLabel,
+    QMenu,
+    QMessageBox,
+    QPushButton,
+    QWidget,
+)
 from pypdf import PdfReader, PdfWriter
 
 from pdf_toolbox import app
 from pdf_toolbox.editor import Object, load_fonts, make_overlay
-from pdf_toolbox.pdf import Page, dimensions, export, locked_page, render
-from pdf_toolbox.workspace import TOOLS
+from pdf_toolbox.pdf import (
+    Cancelled,
+    Page,
+    check_cancelled,
+    dimensions,
+    export,
+    locked_page,
+    render,
+)
+from pdf_toolbox.workspace import ORGANIZE, TOOLS
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -185,6 +202,217 @@ def test_drop_and_clipboard_file_references(window, qtbot, tmp_path):
     window.paste()
     qtbot.waitUntil(lambda: not window.busy)
     assert window.workspace.listing.count() == 4
+
+
+def test_home_mascot_search_and_navigation(window):
+    assert window.findChild(QWidget, "Mascot").isVisible()
+    assert not window.drop.mascot.pixmap.isNull()
+    window.search.setText("no matching tool")
+    assert window.findChild(QLabel, "NoToolResults").isVisible()
+    window.search.setText("split")
+    assert [card for card in window.cards if card.isVisible()] == [window.cards[1]]
+    window.cards[1].click()
+    assert window.workspace.mode == TOOLS[1]
+    assert window.nav_buttons[TOOLS[1]].property("active") is True
+    assert window.nav_buttons["Home"].property("active") is False
+    window.nav_buttons["Home"].click()
+    assert window.findChild(QWidget, "Mascot").isVisible()
+
+
+def test_sidebar_after_loading_images(window, qtbot, tmp_path):
+    source = make_pdf(tmp_path / "conversion.pdf")
+    window.select_tool(TOOLS[3], [source])
+    qtbot.waitUntil(lambda: window.busy is None)
+    for tool in (*TOOLS[:3], TOOLS[4], TOOLS[3]):
+        button = window.nav_buttons[tool]
+        assert not button.icon().isNull()
+        qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+        assert button.property("active") is True
+
+
+def test_empty_tools_have_localized_file_intake(window, qtbot, tmp_path, monkeypatch):
+    source = make_pdf(tmp_path / "intake.pdf")
+    for tool in TOOLS:
+        window.nav_buttons[tool].click()
+        assert window.stack.currentWidget() is window.empty_tool
+        assert window.empty_tool.title.text() == tool
+        assert window.empty_tool.description.text()
+        assert not window.empty_tool.icon.pixmap().isNull()
+        assert window.empty_tool.drop.acceptDrops()
+        assert window.empty_tool.choose.toolTip()
+        expected = (
+            "Drop a PDF here" if tool in {TOOLS[1], TOOLS[4]} else "Drop one or more PDFs here"
+        )
+        assert window.empty_tool.hint.text() == expected
+
+    window.nav_buttons[TOOLS[4]].click()
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *_: (str(source), ""))
+    qtbot.mouseClick(window.empty_tool.choose, Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(lambda: window.stack.currentWidget() is window.editor_view)
+    assert len(window.editor.references) == 2
+
+    window.nav_buttons[TOOLS[2]].click()
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(source))])
+    event = QDropEvent(
+        QPointF(10, 10),
+        Qt.DropAction.CopyAction,
+        mime,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    window.empty_tool.drop.dropEvent(event)
+    qtbot.waitUntil(lambda: window.stack.currentWidget() is window.workspace)
+    assert event.isAccepted()
+    window.workspace.listing.selectAll()
+    window.workspace.remove()
+    assert window.stack.currentWidget() is window.empty_tool
+    assert window.empty_tool.title.text() == TOOLS[2]
+
+
+def test_organize_exports_independent_rotations_blank_and_reversed_order(
+    window, qtbot, tmp_path, monkeypatch
+):
+    source = make_pdf(tmp_path / "organize.pdf", rotation=90)
+    second = make_pdf(tmp_path / "insert.pdf")
+    originals = {path: path.read_bytes() for path in (source, second)}
+    result = tmp_path / "organized.pdf"
+    outputs = []
+    monkeypatch.setattr(window, "destination", lambda *_: result)
+    monkeypatch.setattr(window, "export_done", lambda files, error: outputs.append((files, error)))
+    window.nav_buttons[ORGANIZE].click()
+    assert window.empty_tool.title.text() == ORGANIZE
+    assert window.empty_tool.choose.cursor().shape() == Qt.CursorShape.PointingHandCursor
+    window.accept_files([source])
+    workspace = window.workspace
+    qtbot.waitUntil(lambda: workspace.listing.count() == 2)
+
+    def click_action(name):
+        button = next(
+            item
+            for item in workspace.findChildren(QPushButton)
+            if name in {item.text(), item.accessibleName()}
+        )
+        assert button.isVisible()
+        assert button.cursor().shape() == Qt.CursorShape.PointingHandCursor
+        qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+    workspace.listing.item(0).setSelected(True)
+    click_action("Duplicate")
+    workspace.listing.setCurrentRow(1)
+    click_action("Rotate right")
+    assert [page.rotation for page in workspace.pages()] == [0, 90, 0]
+    click_action("Blank page")
+    assert workspace.listing.item(2).text() == "Blank page\nA4"
+    qtbot.waitUntil(lambda: workspace.viewer.image.pixmap().width() > 0)
+    assert render(workspace.pages()[2], dpi=72).size == (595, 842)
+
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *_: (str(second), ""))
+    monkeypatch.setattr(app, "ask_text", lambda *_: ("2", True))
+    click_action("Add a page range…")
+    qtbot.waitUntil(lambda: workspace.listing.count() == 5)
+    forward = workspace.pages()
+    click_action("Reverse order")
+    assert workspace.pages() == forward[::-1]
+    click_action("Undo")
+    assert workspace.pages() == forward
+    click_action("Redo")
+    click_action("Export…")
+    qtbot.waitUntil(lambda: bool(outputs))
+    assert outputs == [([result], None)]
+    pages = PdfReader(result).pages
+    assert [(int(page.mediabox.width), page.rotation) for page in pages] == [
+        (130, 0),
+        (130, 0),
+        (595, 0),
+        (240, 180),
+        (240, 90),
+    ]
+    for index, reference in enumerate(workspace.pages()):
+        assert render(reference, dpi=72).size == render(Page(result, index), dpi=72).size
+    assert all(path.read_bytes() == data for path, data in originals.items())
+
+
+def test_sidebar_theme_and_button_hover_follow_settings(window):
+    assert window.theme_button.toolTip() == "Choose the app appearance."
+    window.theme_actions["Dark"].trigger()
+    assert window.settings.theme.currentData() == "Dark"
+    assert window.prefs.value("theme") == "Dark"
+    assert window.theme_actions["Dark"].isChecked()
+    window.settings.theme.setCurrentText("Light")
+    assert window.theme_actions["Light"].isChecked()
+    window.settings.language.setCurrentText("ไทย")
+    assert window.theme_button.toolTip() == "เลือกรูปแบบสีของแอป"
+    assert window.theme_actions["Dark"].toolTip() == "ใช้ธีมมืด"
+    for button in [*window.nav_buttons.values(), window.workspace.export_button]:
+        assert button.toolTip()
+
+
+def test_home_file_paste_from_search(window, qtbot, tmp_path):
+    source = make_pdf(tmp_path / "pasted.pdf")
+    clipboard = QMimeData()
+    clipboard.setUrls([QUrl.fromLocalFile(str(source))])
+    QApplication.clipboard().setMimeData(clipboard)
+    window.search.setFocus()
+    qtbot.keyClick(window.search, Qt.Key.Key_V, Qt.KeyboardModifier.ControlModifier)
+    menu = QApplication.activePopupWidget()
+    assert isinstance(menu, QMenu)
+    action = menu.actions()[0]
+    assert not action.icon().isNull()
+    qtbot.mouseClick(menu, Qt.MouseButton.LeftButton, pos=menu.actionGeometry(action).center())
+    qtbot.waitUntil(lambda: window.workspace.listing.count() == 2)
+    assert window.nav_buttons[TOOLS[0]].property("active") is True
+    assert QApplication.activePopupWidget() is None
+
+
+def test_page_captions_stay_visible_when_thumbnails_arrive(window, qtbot, tmp_path):
+    source = make_pdf(tmp_path / "source.pdf")
+    window.select_tool(TOOLS[2], [source])
+    listing = window.workspace.listing
+    qtbot.waitUntil(lambda: listing.count() == 2)
+    item = listing.item(0)
+    assert item.text().splitlines() == ["source.pdf", "Page 1"]
+    rect = listing.visualItemRect(item)
+    assert listing.viewport().rect().contains(rect)
+    caption = rect.adjusted(5, rect.height() - 50, -5, -4)
+    before = listing.viewport().grab(caption).toImage()
+    title = item.text()
+    item.setText("\n")
+    assert listing.viewport().grab(caption).toImage() != before
+    item.setText(title)
+    qtbot.waitUntil(lambda: not item.icon().isNull(), timeout=3000)
+    assert listing.visualItemRect(item) == rect
+    assert listing.viewport().grab(caption).toImage() == before
+    changes = []
+    listing.model().dataChanged.connect(lambda *_: changes.append(True))
+    window.workspace.thumbnails.fill()
+    assert not changes
+
+
+def test_processing_modal_animates_reports_and_cancels(window, qtbot):
+    results = []
+
+    def work(cancelled, progress):
+        progress(2, 4)
+        cancelled.wait(timeout=5)
+        check_cancelled(cancelled)
+
+    window.run_job(work, "Exporting PDF pages…", lambda value, error: results.append(error))
+    dialog = window.processing
+    assert dialog.isVisible()
+    assert dialog.isModal()
+    assert dialog.dog.animation.isActive()
+    assert not dialog.dog.picture.isNull()
+    qtbot.waitUntil(lambda: dialog.percent.text() == "50%")
+    assert dialog.bar.value() == 2
+    assert dialog.dog.fraction == 0.5
+    pose = dialog.dog.grab().toImage()
+    qtbot.waitUntil(lambda: dialog.dog.grab().toImage() != pose)
+    qtbot.mouseClick(dialog.cancel, Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(lambda: window.processing is None)
+    assert len(results) == 1 and isinstance(results[0], Cancelled)
+    qtbot.mouseClick(window.nav_buttons[TOOLS[1]], Qt.MouseButton.LeftButton)
+    assert window.workspace.mode == TOOLS[1]
 
 
 def test_thai_language_switch_preserves_operation_and_page_selection(window, qtbot, tmp_path):

@@ -223,6 +223,8 @@ class GitHub:
             return self.client.open(request, timeout=12)
         except HTTPError as error:
             error.close()
+            if error.code == 404 and path == "latest" and not self.config.private:
+                raise UpdateError("No public update release was found.") from None
             if error.code in {403, 429} and (
                 error.headers.get("X-RateLimit-Remaining") == "0" or error.code == 429
             ):

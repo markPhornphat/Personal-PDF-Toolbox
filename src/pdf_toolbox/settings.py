@@ -5,44 +5,18 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
     QLineEdit,
     QPushButton,
     QSpinBox,
+    QVBoxLayout,
     QWidget,
 )
 
 from .localization import Choice, ask_text, tr
 from .updater import Credentials, UpdateError
-
-DARK = """
-QWidget { background: #151c26; color: #e5edf6; }
-QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QTextEdit, QListWidget, QGraphicsView, QPushButton {
-    background: #202c3b; border: 1px solid #3b5066; border-radius: 7px; padding: 5px; }
-QPushButton:hover { background: #2c3a4c; }
-QWidget:disabled { color: #8290a3; }
-QListWidget::item:selected { background: #274c72; color: #ffffff; }
-"""
-LIGHT = """
-QWidget { background: #f6f8fc; color: #142438; }
-QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QTextEdit, QListWidget, QGraphicsView, QPushButton {
-    background: #ffffff; border: 1px solid #c7d3e2; border-radius: 7px; padding: 5px; }
-QPushButton:hover { background: #eaf4ff; }
-QWidget:disabled { color: #778597; }
-QListWidget::item:selected { background: #d8eaff; color: #173b66; }
-"""
-COMMON = """
-QWidget { font-family: "Segoe UI"; font-size: 13px; }
-QPushButton { min-height: 24px; padding: 5px 12px; text-align: center; }
-QPushButton[primary="true"] { background: #075db4; border-color: #075db4; color: white; }
-QPushButton[primary="true"]:hover { background: #064d95; }
-QPushButton[primary="true"]:disabled { background: #59728b; border-color: #59728b; }
-QLabel#Heading { font-size: 26px; font-weight: 650; }
-QLabel#Brand { font-size: 24px; font-weight: 700; }
-QLabel#Section { font-size: 17px; font-weight: 650; }
-QPushButton#ToolCard { font-size: 15px; text-align: left; min-height: 55px; padding: 10px; }
-QFrame#DropArea { border: 2px dashed #679acc; border-radius: 12px; }
-QFrame#DropArea[dragging="true"] { border: 3px solid #1677cf; }
-"""
 
 
 def data_path() -> Path:
@@ -61,7 +35,33 @@ class Settings(QWidget):
         super().__init__()
         self.window = window
         self.prefs = window.prefs
-        form = QFormLayout(self)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(8, 3, 0, 4)
+        root.setSpacing(17)
+        heading = QLabel("Settings")
+        heading.setObjectName("Heading")
+        root.addWidget(heading)
+        columns = QHBoxLayout()
+        columns.setSpacing(13)
+        root.addLayout(columns)
+
+        def section(title):
+            card = QFrame()
+            card.setProperty("panel", True)
+            layout = QVBoxLayout(card)
+            layout.setContentsMargins(16, 14, 16, 17)
+            caption = QLabel(title)
+            caption.setObjectName("Section")
+            layout.addWidget(caption)
+            form = QFormLayout()
+            form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+            form.setVerticalSpacing(9)
+            layout.addLayout(form)
+            layout.addStretch()
+            columns.addWidget(card, 1)
+            return form
+
+        form = section("Preferences")
         self.language = self.combo(
             form, "Language", "language", ["English", "ไทย"], "English", window.translate
         )
@@ -73,10 +73,13 @@ class Settings(QWidget):
         form.addRow("Default output folder", self.folder)
         self.spin(form, "Default image DPI", "dpi", 1, 2400, 200)
         self.spin(form, "JPG quality", "quality", 1, 100, 90)
+        self.button(form, "Clear preview cache", window.clear_cache)
+        self.button(form, "Reset preferences", self.reset)
+        form = section("Software updates")
         self.automatic = QCheckBox("Check GitHub for updates in the background")
         self.automatic.setChecked(self.prefs.value("auto_updates", False, type=bool))
         self.automatic.toggled.connect(self.toggle_updates)
-        form.addRow("Software updates", self.automatic)
+        form.addRow(self.automatic)
         self.spin(form, "Check interval (hours)", "interval", 1, 168, 24)
         self.check = QPushButton("Check for updates")
         self.check.clicked.connect(lambda: window.check_updates(manual=True))
@@ -88,9 +91,7 @@ class Settings(QWidget):
         credential.clicked.connect(self.manage_credential)
         form.addRow(credential)
         credential.setVisible(bool(window.update_config and window.update_config.private))
-        self.button(form, "Clear preview cache", window.clear_cache)
-        self.button(form, "Reset preferences", self.reset)
-        self.button(form, "About", window.about)
+        root.addStretch()
 
     def combo(self, form, label, key, values, default, callback):
         box = Choice()
