@@ -12,6 +12,7 @@ PDF Toolbox uses the following runtime dependencies. The packaged application in
 | cryptography | Apache-2.0 or BSD-3-Clause, with OpenSSL notices | [cryptography](https://pypi.org/project/cryptography/) |
 | cffi / pycparser | MIT / BSD-3-Clause | [cffi](https://pypi.org/project/cffi/) and [pycparser](https://pypi.org/project/pycparser/) |
 | pywin32-ctypes | BSD-3-Clause | [pywin32-ctypes](https://pypi.org/project/pywin32-ctypes/) |
+| pywin32 | Installed win32, win32com and Pythonwin copyright/license notices are bundled under `licenses/pywin32`. Distribution metadata identifies PSF licensing; consult the included component notices. | [pywin32](https://github.com/mhammond/pywin32) |
 | PyInstaller bootloader | GPL with bootloader exception | [PyInstaller license](https://pyinstaller.org/en/stable/license.html) |
 | Inno Setup | Inno Setup license | [Inno Setup license](https://jrsoftware.org/files/is/license.txt) |
 | Noto Sans Thai | SIL Open Font License 1.1. Font and license are bundled together. | [Font source](https://github.com/google/fonts/tree/main/ofl/notosansthai) |

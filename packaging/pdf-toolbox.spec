@@ -23,6 +23,11 @@ for name in ("pyside6_essentials", "shiboken6", "pypdf-", "pypdfium2", "pillow-"
 for folder in ("pypdfium2_raw", "pypdfium2"):
     data.extend((str(file), f"licenses/{folder}")
                 for file in (runtime / folder).glob("*LICENSE*") if file.is_file())
+for folder in ("win32", "win32com", "pythonwin"):
+    notice = runtime / folder / "license.txt"
+    if not notice.is_file():
+        raise FileNotFoundError(f"Missing pywin32 notice: {notice}")
+    data.append((str(notice), f"licenses/pywin32/{folder}"))
 if (metadata / "license-python.txt").is_file():
     data.append((str(metadata / "license-python.txt"), "licenses"))
 
