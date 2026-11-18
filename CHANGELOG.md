@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2
+
+- Improved the PDF to Word workspace with distinct insertion, template, and output sections and a larger drag-and-drop template card.
+- Fixed dropdown colors in light mode and added a smooth opening animation that respects system motion settings.
+
 ## 0.3.1
 
 - The PDF to Word schematic now shows header and footer bands rendered by Word, preserving left/right placement, tab stops, formatting, supported inline artwork, and odd/even page variations.
