@@ -52,10 +52,16 @@ Name: "{autodesktop}\PDF Toolbox"; Filename: "{app}\PDF Toolbox.exe"; WorkingDir
 
 [Run]
 Filename: "{app}\PDF Toolbox.exe"; WorkingDir: "{app}"; Description: "{cm:LaunchToolbox}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\PDF Toolbox.exe"; WorkingDir: "{app}"; Flags: nowait runasoriginaluser; Check: RestartAfterUpdate
 
 [Code]
 var
   PreviousFiles: TArrayOfString;
+
+function RestartAfterUpdate(): Boolean;
+begin
+  Result := WizardSilent and (ExpandConstant('{param:AUTORESTART|0}') = '1');
+end;
 
 function GetFileAttributes(FileName: String): LongWord;
   external 'GetFileAttributesW@kernel32.dll stdcall';

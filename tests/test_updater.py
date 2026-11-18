@@ -14,6 +14,16 @@ from pdf_toolbox.updater import (
     verify_manifest,
     verify_file,
 )
+from pdf_toolbox.update_ui import startup_check_key
+
+
+def test_startup_key_reads_stable_windows_boot_identifier():
+    import os
+
+    if os.name == "nt":
+        key = startup_check_key()
+        assert key.rsplit("/", 1)[1].isdigit()
+        assert key == startup_check_key()
 
 
 def test_public_repo_without_releases_reports_no_public_release(monkeypatch):

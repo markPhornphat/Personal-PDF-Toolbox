@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- Added an illustrated About dialog and centered the theme shortcut beside Settings.
+- Added startup update checks once per day or Windows boot, a bottom-right notice, and automatic verified silent installation and restart from Update now.
+- Added loading and result feedback to update checks in About and Settings.
+
 ## 0.2.0
 
 - Added Organize PDF with rotation, blank A4 pages, reverse order, page-range insertion, reordering, and undo and redo.

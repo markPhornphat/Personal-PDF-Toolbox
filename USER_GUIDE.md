@@ -14,6 +14,6 @@ Drop files on Home or choose Browse files. You can also copy a file in File Expl
 
 Choose a new filename when exporting a PDF. Original files stay in place.
 
-Update checks can be enabled in Settings for a configured build. Choose **Update now** to download a verified release, then **Ready to install** when you can finish editing. Turn off background checks in Settings at any time.
+Enable update checks in Settings to check on the first app launch of the day and after Windows restarts. A notice appears in the bottom-right corner when an update is available. **Remind me later** dismisses it until the next eligible startup check. **Update now** downloads and verifies the installer, installs silently, and reopens the app. Save pending edits before installation. You can also check manually from Settings or About, where progress and the result appear.
 
 To uninstall, open **Windows Settings → Apps → Installed apps**, locate PDF Toolbox and choose **Uninstall**. Saved PDFs and application preferences are kept.

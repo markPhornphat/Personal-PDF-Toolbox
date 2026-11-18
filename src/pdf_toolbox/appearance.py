@@ -77,6 +77,7 @@ def stylesheet(palette):
     style = """
     QWidget { color: $ink; font-family: "Nunito"; font-size: 14px; }
     QMainWindow, QDialog, QMessageBox, QMenu { background: $background; }
+    QDialog#UpdateNotice { background: $surface; border: 2px solid $border; border-radius: 18px; }
     QLabel { background: transparent; }
     QLabel#Brand { font-size: 21px; font-weight: 850; }
     QLabel#BrandMark { background: $primary; border-radius: 12px; }
@@ -136,7 +137,11 @@ def stylesheet(palette):
     QPushButton#NavButton:focus { border-color: $focus; }
     QPushButton#ThemeButton { background: $field; padding: 4px; }
     QPushButton#ThemeButton:hover { background: $hover; }
-    QPushButton#ThemeButton::menu-indicator { image: none; }
+    QFrame#AboutHero { background: $organize_card; border-radius: 17px; }
+    QLabel#AboutVersion {
+        background: $organize; color: $organize_ink; border-radius: 10px;
+        font-size: 12px; font-weight: 850; padding: 3px 11px;
+    }
     QPushButton#ToolCard { background: $surface; padding: 0; border-radius: 17px; }
     QPushButton#ToolCard[featured="true"] { background: $organize_card; }
     QPushButton#ToolCard:hover, QPushButton#ToolCard:focus { border: 2px solid $focus; }

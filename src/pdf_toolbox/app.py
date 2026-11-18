@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QActionGroup, QColor, QDesktopServices, QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QFrame,
     QFileDialog,
     QGraphicsOpacityEffect,
@@ -65,6 +66,7 @@ from .localization import (
 from .progress import ProcessingDialog
 from .settings import Settings, data_path, preferences
 from .updater import Config, Credentials, GitHub, UpdateError, verify_file
+from .update_ui import UpdateNotice, startup_check_key
 from .viewer import local_paths
 from .workspace import ORGANIZE, TOOLS, Workspace
 
@@ -241,6 +243,12 @@ class Window(QMainWindow):
         self.busy = None
         self.processing = None
         self.update_running = None
+        self.update_notice = None
+        self.update_reminded_later = False
+        self.update_dialog = None
+        self.about_dialog = None
+        self.about_check = None
+        self.startup_update_key = startup_check_key()
         self.release = None
         self.installer = None
         self.close_approved = False
@@ -313,7 +321,7 @@ class Window(QMainWindow):
                 row = QHBoxLayout()
                 row.setSpacing(4)
                 row.addWidget(button, 1)
-                row.addWidget(self.build_theme_button())
+                row.addWidget(self.build_theme_button(), 0, Qt.AlignmentFlag.AlignVCenter)
                 nav.addLayout(row)
             else:
                 nav.addWidget(button)
@@ -346,10 +354,10 @@ class Window(QMainWindow):
         self.translate()
         self.refresh_navigation()
         self.update_timer = QTimer(self)
-        self.update_timer.setInterval(15 * 60 * 1000)
+        self.update_timer.setSingleShot(True)
+        self.update_timer.setInterval(2000)
         self.update_timer.timeout.connect(lambda: self.check_updates(manual=False))
         self.update_timer.start()
-        QTimer.singleShot(2000, self, lambda: self.check_updates(manual=False))
         QTimer.singleShot(0, self, self.confirm_upgrade)
 
     def build_home(self):
@@ -402,7 +410,7 @@ class Window(QMainWindow):
         button = QPushButton()
         button.setObjectName("ThemeButton")
         button.setIconSize(QSize(19, 19))
-        button.setFixedWidth(36)
+        button.setFixedSize(36, 36)
         button.setAccessibleName("Theme")
         menu = QMenu(button)
         menu.setToolTipsVisible(True)
@@ -416,7 +424,7 @@ class Window(QMainWindow):
                 lambda _checked, value=theme: self.settings.theme.setCurrentText(value)
             )
             self.theme_actions[theme] = action
-        button.setMenu(menu)
+        button.clicked.connect(lambda: menu.popup(button.mapToGlobal(button.rect().bottomLeft())))
         self.theme_button = button
         return button
 
@@ -501,9 +509,7 @@ class Window(QMainWindow):
             card.refresh_accessibility()
         self.filter_tools(self.search.text())
         self.version_label.setText(tr(self, "Version {version}", version=VERSION))
-        self.update_button.setText(
-            tr(self, "Ready to install" if self.installer else "Update available")
-        )
+        self.update_button.setText(tr(self, "Update available"))
         self.settings.status.setText(
             tr(self, self.prefs.value("update_status", "No update checks yet"))
         )
@@ -906,6 +912,13 @@ class Window(QMainWindow):
             dialog.deleteLater()
             self.statusBar().clearMessage()
             done(value, error)
+            if (
+                self.release
+                and not self.busy
+                and not self.update_running
+                and not self.update_reminded_later
+            ):
+                self.offer_update()
 
         self.busy = self.jobs.submit(work, finish, dialog.report)
         dialog.open()
@@ -987,44 +1000,132 @@ class Window(QMainWindow):
         )
 
     def about(self):
-        box = QMessageBox(
-            QMessageBox.Icon.Information,
-            tr(self, "About PDF Toolbox"),
-            f"PDF Toolbox {VERSION}\n" + tr(self, "Local desktop PDF tools"),
-            parent=self,
-        )
-        update = box.addButton(tr(self, "Check for updates"), QMessageBox.ButtonRole.ActionRole)
-        licenses = box.addButton(tr(self, "Licenses"), QMessageBox.ButtonRole.ActionRole)
-        guide = box.addButton(tr(self, "User guide"), QMessageBox.ButtonRole.ActionRole)
-        box.addButton(QMessageBox.StandardButton.Close)
-        localize_buttons(box, QMessageBox.StandardButton.Close)
-        box.exec()
-        if box.clickedButton() == update:
-            self.check_updates(manual=True)
-        elif box.clickedButton() == licenses:
-            file = RESOURCE / "THIRD_PARTY_LICENSES.md"
-            if file.exists():
+        if self.about_dialog is not None and self.about_dialog.isVisible():
+            self.about_dialog.raise_()
+            return
+        dialog = QDialog(self)
+        self.about_dialog = dialog
+        dialog.finished.connect(lambda _: self.clear_about())
+        dialog.setObjectName("AboutDialog")
+        dialog.setWindowTitle(tr(self, "About PDF Toolbox"))
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.setMinimumWidth(430)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(13)
+
+        hero = QFrame()
+        hero.setObjectName("AboutHero")
+        cover = QVBoxLayout(hero)
+        cover.setContentsMargins(18, 11, 18, 20)
+        cover.setSpacing(4)
+        center = Qt.AlignmentFlag.AlignHCenter
+        mascot = Mascot(RESOURCE / "resources/paper-dog.png")
+        mascot.setAccessibleName(tr(self, "Dog with an ice cream cone"))
+        mascot.setFixedSize(140, 138)
+        mascot.backing = QColor(self.theme_palette["organize"])
+        cover.addWidget(mascot, alignment=center)
+
+        title = QLabel("PDF Toolbox")
+        title.setObjectName("Heading")
+        cover.addWidget(title, alignment=center)
+        version = QLabel(tr(self, "Version {version}", version=VERSION))
+        version.setObjectName("AboutVersion")
+        cover.addWidget(version, alignment=center)
+        description = QLabel(tr(self, "Local desktop PDF tools"))
+        description.setObjectName("Muted")
+        cover.addWidget(description, alignment=center)
+        layout.addWidget(hero)
+
+        def open_document(filename):
+            file = RESOURCE / filename
+            if file.is_file():
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(file)))
-        elif box.clickedButton() == guide:
-            filename = "USER_GUIDE_TH.md" if thai_enabled(self) else "USER_GUIDE.md"
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(RESOURCE / filename)))
+
+        def close_and_run(callback):
+            dialog.accept()
+            callback()
+
+        guide = "USER_GUIDE_TH.md" if thai_enabled(self) else "USER_GUIDE.md"
+        actions = QHBoxLayout()
+        for name, icon, callback in [
+            ("Check for updates", "rotate-right", lambda: self.check_updates(manual=True)),
+            ("User guide", "paper", lambda: open_document(guide)),
+            ("Licenses", "about", lambda: open_document("THIRD_PARTY_LICENSES.md")),
+        ]:
+            button = QPushButton(tool_icon(icon, self.theme_palette["primary"]), tr(self, name))
+            describe_button(button, self, name)
+            if name == "Check for updates":
+                self.about_check = button
+                button.clicked.connect(lambda: self.check_updates(manual=True))
+            else:
+                button.clicked.connect(lambda _checked, handler=callback: close_and_run(handler))
+            if name == "Check for updates":
+                layout.addWidget(button)
+            else:
+                actions.addWidget(button, 1)
+        layout.addLayout(actions)
+        self.about_progress = QProgressBar()
+        self.about_progress.setRange(0, 0)
+        self.about_progress.setTextVisible(False)
+        self.about_progress.setFixedHeight(8)
+        self.about_progress.setAccessibleName(tr(self, "Checking for updates…"))
+        self.about_progress.hide()
+        layout.addWidget(self.about_progress)
+        self.about_status = QLabel()
+        self.about_status.setWordWrap(True)
+        layout.addWidget(self.about_status)
+
+        close = QPushButton(tr(self, "Close"))
+        describe_button(close, self, "Close")
+        close.setDefault(True)
+        close.clicked.connect(dialog.reject)
+        layout.addWidget(close, alignment=Qt.AlignmentFlag.AlignRight)
+        dialog.open()
+
+    def clear_about(self):
+        self.about_dialog = None
+        self.about_check = None
+
+    def update_check_feedback(self, checking, text=""):
+        self.settings.check.setEnabled(not checking)
+        self.settings.check.setText(
+            tr(self, "Checking for updates…" if checking else "Check for updates")
+        )
+        if self.about_check is not None:
+            self.about_check.setEnabled(not checking)
+            self.about_check.setText(
+                tr(self, "Checking for updates…" if checking else "Check for updates")
+            )
+            self.about_status.setText("" if checking else tr(self, text))
+            self.about_progress.setVisible(checking)
 
     def check_updates(self, *, manual):
-        if self.update_running or self.update_button.isVisible():
+        if self.update_running:
             return
         if not manual:
             if not self.prefs.value("auto_updates", False, type=bool):
                 return
-            interval = self.prefs.value("interval", 24, type=int) * 3600
-            if time.time() - self.prefs.value("last_attempt", 0, type=float) < interval:
+            if self.prefs.value("startup_update_check", "") == self.startup_update_key:
                 return
+        if manual and self.release:
+            self.update_reminded_later = False
+            if self.about_dialog is not None:
+                self.about_dialog.accept()
+            self.offer_update()
+            return
         if not self.update_config:
             status = "Updates are unavailable for this build."
             self.update_status(status)
+            self.update_check_feedback(False, status)
             if manual:
                 self.notice(status)
             return
         self.prefs.setValue("last_attempt", time.time())
+        if not manual:
+            self.prefs.setValue("startup_update_check", self.startup_update_key)
+            self.prefs.sync()
+        self.update_check_feedback(True, "Checking for updates…")
 
         def work(*_):
             return self.client().check(VERSION)
@@ -1038,21 +1139,23 @@ class Window(QMainWindow):
                     else "Update check could not finish."
                 )
                 self.update_status(status)
+                self.update_check_feedback(False, status)
                 if manual:
                     self.notice(status)
                 return
             if not release:
                 self.update_status("This version is current.")
+                self.update_check_feedback(False, "This version is current.")
                 if manual:
                     self.notice("This version is current.")
                 return
-            if not manual and release.manifest.version == self.prefs.value("skipped", ""):
-                self.update_status("The available version was skipped.")
-                return
+            self.update_check_feedback(False)
             self.release = release
             self.update_status(f"Version {release.manifest.version} is available.")
             self.update_button.show()
-            if manual and not self.busy:
+            if not self.busy:
+                if self.about_dialog is not None:
+                    self.about_dialog.accept()
                 self.offer_update()
 
         self.update_running = self.update_jobs.submit(work, done)
@@ -1071,128 +1174,118 @@ class Window(QMainWindow):
     def offer_update(self):
         if self.busy or self.update_running or not self.release:
             return
-        if self.installer:
-            self.install_update()
+        if self.update_notice is not None:
+            if self.update_notice.isVisible():
+                self.update_notice.raise_()
+                return
+            self.update_notice.deleteLater()
+        self.update_notice = UpdateNotice(self, self.release)
+        self.update_notice.rejected.connect(self.remind_update_later)
+        self.update_notice.position_at_corner()
+        self.update_notice.show()
+        self.update_notice.raise_()
+
+    def remind_update_later(self):
+        self.update_reminded_later = True
+
+    def start_update(self):
+        if self.busy or self.update_running or not self.release:
             return
-        release = self.release
-        details = release.manifest
-        box = QMessageBox(
-            QMessageBox.Icon.Information,
-            tr(self, "Update available"),
-            tr(
-                self,
-                "Installed {installed} • Available {latest}",
-                installed=VERSION,
-                latest=details.version,
-            )
-            + "\n"
-            f"{details.date} • {details.size / 1048576:.1f} MB",
-            parent=self,
-        )
-        box.setTextFormat(Qt.TextFormat.PlainText)
-        box.setDetailedText(release.notes)
-        if release.notes and thai_enabled(self):
-            for button in box.buttons():
-                if button.text() in {"Show Details...", "Show Details…"}:
-                    button.setText(tr(self, "Show Details…"))
-                    button.clicked.connect(
-                        lambda _, details_button=button: details_button.setText(
-                            tr(self, details_button.text().replace("...", "…"))
-                        )
-                    )
-                    break
-        now = box.addButton(tr(self, "Update now"), QMessageBox.ButtonRole.AcceptRole)
-        later = box.addButton(tr(self, "Later"), QMessageBox.ButtonRole.RejectRole)
-        skip = box.addButton(tr(self, "Skip this version"), QMessageBox.ButtonRole.ActionRole)
-        box.setDefaultButton(later)
-        describe_buttons(box, self)
-        box.exec()
-        if box.clickedButton() == skip:
-            self.prefs.setValue("skipped", details.version)
-            self.update_button.hide()
-        elif box.clickedButton() == now:
-            self.download_update()
-        elif box.clickedButton() == later:
-            self.update_button.hide()
+        self.resolve_editor(self.download_update, allow_discard=False)
 
     def download_update(self):
+        if self.update_running or not self.release:
+            return
+        if self.update_notice is not None:
+            self.update_notice.hide()
         release = self.release
-        self.progress.setRange(0, 0)
-        self.progress.show()
-        self.cancel.show()
-        self.notice("Downloading verified update…", 0)
+        dialog = ProcessingDialog(
+            self,
+            "Downloading and verifying update…",
+            self.drop.mascot.pixmap,
+            self.theme_palette,
+        )
+        dialog.cancel_requested.connect(self.cancel_work)
+        self.update_dialog = dialog
+        self.update_button.setEnabled(False)
 
         def work(event, progress):
             return self.client().download(release, data_path() / "updates", event, progress)
 
         def progress(current, total):
-            if not self.busy:
-                self.progress_value(current, total)
-                self.notice(
-                    tr(
-                        self,
-                        "Downloaded {current:.1f} of {total:.1f} MB",
-                        current=current / 1048576,
-                        total=total / 1048576,
-                    ),
-                    0,
-                )
+            dialog.report(current, total)
 
         def done(path, error):
             self.update_running = None
-            if not self.busy:
-                self.progress.hide()
-                self.cancel.hide()
+            self.update_dialog = None
+            dialog.done(0)
+            dialog.deleteLater()
+            self.update_button.setEnabled(True)
             if error:
-                self.notice(
+                status = (
                     str(error)
                     if isinstance(error, UpdateError)
                     else "Update download ended before installation."
                 )
-            else:
-                self.installer = path
-                self.update_button.setText(tr(self, "Ready to install"))
-                self.notice("Update verified. Select Ready to install when you’re ready.")
+                if isinstance(error, Cancelled):
+                    status = "Update cancelled."
+                self.update_status(status)
+                self.notice(status)
+                self.offer_update()
+                return
+            self.installer = path
+            self.install_update()
 
         self.update_running = self.update_jobs.submit(work, done, progress)
+        dialog.open()
 
     def install_update(self):
         if self.busy or not self.installer or not self.release:
             return
         installer, release = self.installer, self.release
-        if not self.confirm(
-            "Install update?", "PDF Toolbox will close and start the verified installer."
-        ):
+        try:
+            verify_file(
+                installer,
+                release.manifest,
+                self.update_config.require_authenticode if self.update_config else False,
+            )
+        except (OSError, UpdateError):
+            self.installer = None
+            self.discard_download(installer)
+            self.statusBar().clearMessage()
+            self.alert("The downloaded installer could not be verified. Download it again.")
             return
-
-        def launch():
-            try:
-                verify_file(
-                    installer,
-                    release.manifest,
-                    self.update_config.require_authenticode if self.update_config else False,
-                )
-            except (OSError, UpdateError):
-                self.installer = None
-                self.update_button.setText(tr(self, "Update available"))
-                self.discard_download(installer)
-                self.statusBar().clearMessage()
-                self.alert("The downloaded installer could not be verified. Download it again.")
-                return
-            try:
-                self.prefs.setValue("pending_upgrade", release.manifest.version)
-                self.prefs.setValue("upgrade_installer", str(installer))
-                self.prefs.sync()
-                subprocess.Popen([str(installer), f"/WAITPID={os.getpid()}"])
-            except OSError:
-                self.prefs.remove("pending_upgrade")
-                self.prefs.remove("upgrade_installer")
-                self.alert("The installer could not start. Try again.")
-                return
-            self.close_approved = True
-            self.close()
-
-        self.resolve_editor(launch, allow_discard=False)
+        install_folder = Path(sys.executable).parent if PACKAGED else None
+        if install_folder is None:
+            self.notice(
+                "The verified update is ready. Automatic installation requires the installed app."
+            )
+            return
+        try:
+            self.prefs.setValue("pending_upgrade", release.manifest.version)
+            self.prefs.setValue("upgrade_installer", str(installer))
+            self.prefs.sync()
+            language = "thai" if thai_enabled(self) else "english"
+            subprocess.Popen(
+                [
+                    str(installer),
+                    "/VERYSILENT",
+                    "/SUPPRESSMSGBOXES",
+                    "/NORESTART",
+                    "/AUTORESTART=1",
+                    f"/WAITPID={os.getpid()}",
+                    f"/DIR={install_folder}",
+                    f"/LANG={language}",
+                ]
+            )
+        except OSError:
+            self.prefs.remove("pending_upgrade")
+            self.prefs.remove("upgrade_installer")
+            self.prefs.sync()
+            self.alert("The installer could not start. Try again.")
+            return
+        self.close_approved = True
+        self.close()
 
     def confirm_upgrade(self):
         pending = self.prefs.value("pending_upgrade", "")

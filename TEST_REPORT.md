@@ -1,8 +1,12 @@
-# PDF Toolbox 0.2.0 development report
+# PDF Toolbox development report
 
 PDF Toolbox provides six local Windows GUI workspaces for merge and append, split, remove and extract, conversion to JPG and PNG, visual PDF editing, and organizing pages. The Windows x64 installer is built from the same source. See the [feature matrix](FEATURE_MATRIX.md), [dashboard](docs/screenshots/dashboard.png), [Thai dark mode](docs/screenshots/thai-dark-home.png), and [editor](docs/screenshots/editor.png).
 
 ## Verified locally
+
+- The public v0.2.0 release points to the 0.2.0 checkpoint. The updater used the installed 0.1.4 configuration to discover it, verify the signed manifest, and download and verify the installer. GitHub Actions built successfully but its publish job did not receive the key values. The public release uses a configured rebuild signed locally. Installation through the updater on this Windows profile remains unverified.
+
+- The 0.2.1 update-flow build passed 39 tests offscreen and eight focused GUI and updater tests on native Windows Qt. The update tests cover startup checks once per day or boot, the actual Windows boot identifier, manual override, loading and current-version feedback in About, dismissal, one-click download and silent installer launch, signature verification, settings persistence, and unsaved-change cancellation. Silent installation and restart flags were verified with a simulated launch. A real installed 0.2.1 to later-version silent upgrade remains unverified.
 
 - Windows 11 x64 build 26300, CPython 3.12.16. The locked runtime uses PySide6 Essentials 6.10.2, pypdf 6.9.2, pypdfium2 5.15.2, Pillow 12.2.0, cryptography 47.0.0 and pywin32-ctypes 0.2.3.
 - 32 pytest cases passed, including 20 GUI cases rerun on native Windows Qt and at 2× Qt scaling. Ruff and mypy passed and the lock resolved offline. New coverage exercised the Organize workspace from intake to export, including hand cursors, page-range and blank-page insertion, independent rotation of duplicate pages, reverse order, undo and redo, preview dimensions, and source preservation.

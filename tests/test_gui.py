@@ -7,6 +7,7 @@ from PySide6.QtGui import QColor, QDropEvent, QImage
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
+    QDialog,
     QFileDialog,
     QLabel,
     QMenu,
@@ -348,6 +349,46 @@ def test_sidebar_theme_and_button_hover_follow_settings(window):
         assert button.toolTip()
 
 
+def test_theme_icon_is_centered_and_opens_theme_menu(window, qtbot):
+    window.settings.theme.setCurrentText("Dark")
+    button = window.theme_button
+    screenshot = button.grab()
+    picture = screenshot.toImage()
+    ink = QColor(window.theme_palette["primary"])
+    columns = [
+        x
+        for x in range(picture.width())
+        if any(picture.pixelColor(x, y) == ink for y in range(picture.height()))
+    ]
+    assert columns
+    assert (
+        abs(columns[0] + columns[-1] - (picture.width() - 1)) <= 4 * screenshot.devicePixelRatio()
+    )
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+    menu = QApplication.activePopupWidget()
+    assert isinstance(menu, QMenu)
+    assert window.theme_actions["Dark"].isChecked()
+    qtbot.keyClick(menu, Qt.Key.Key_Escape)
+
+
+def test_about_dialog_shows_mascot_and_checks_for_updates(window, qtbot, monkeypatch):
+    checks = []
+    monkeypatch.setattr(window, "check_updates", lambda *, manual: checks.append(manual))
+    qtbot.mouseClick(window.nav_buttons["About"], Qt.MouseButton.LeftButton)
+    dialog = QApplication.activeModalWidget()
+    assert isinstance(dialog, QDialog)
+    assert dialog.objectName() == "AboutDialog"
+    assert dialog.findChild(QWidget, "Mascot").isVisible()
+    assert dialog.findChild(QLabel, "AboutVersion").text() == f"Version {app.VERSION}"
+    actions = {button.text(): button for button in dialog.findChildren(QPushButton)}
+    assert set(actions) == {"Check for updates", "User guide", "Licenses", "Close"}
+    assert all(button.toolTip() for button in actions.values())
+    qtbot.mouseClick(actions["Check for updates"], Qt.MouseButton.LeftButton)
+    assert checks == [True]
+    assert QApplication.activeModalWidget() is dialog
+    dialog.reject()
+
+
 def test_home_file_paste_from_search(window, qtbot, tmp_path):
     source = make_pdf(tmp_path / "pasted.pdf")
     clipboard = QMimeData()
@@ -529,12 +570,13 @@ def test_update_checks_consent_and_rejects_tampering_before_launch(window, tmp_p
     alerts = []
     monkeypatch.setattr(app.subprocess, "Popen", lambda args: launched.append(args))
     monkeypatch.setattr(window, "alert", alerts.append)
-    monkeypatch.setattr(window, "confirm", lambda *_: False)
-    window.install_update()
+    window.offer_update()
+    assert window.update_notice.isVisible()
+    window.update_notice.later.click()
     assert not launched
     assert not window.prefs.contains("pending_upgrade")
 
-    monkeypatch.setattr(window, "confirm", lambda *_: True)
+    monkeypatch.setattr(app, "PACKAGED", True)
     installer.write_bytes(b"!" * len(content))
     window.install_update()
     assert alerts
@@ -547,6 +589,108 @@ def test_update_checks_consent_and_rejects_tampering_before_launch(window, tmp_p
     window.installer = installer
     window.install_update()
     assert launched[0][0] == str(installer)
+    assert "/VERYSILENT" in launched[0]
+    assert "/AUTORESTART=1" in launched[0]
+    assert "/LANG=thai" in launched[0]
     persisted = QSettings(window.prefs.fileName(), QSettings.Format.IniFormat)
     assert persisted.value("pending_upgrade") == version
     assert persisted.value("language") == "ไทย"
+
+
+def test_startup_updates_check_once_per_day_or_boot(window, qtbot, monkeypatch):
+    from types import SimpleNamespace
+
+    from pdf_toolbox.updater import Config
+
+    window.update_config = Config("owner/repo", bytes(32), False)
+    window.update_timer.stop()
+    window.prefs.setValue("auto_updates", True)
+    calls = []
+    monkeypatch.setattr(
+        window,
+        "client",
+        lambda: SimpleNamespace(check=lambda version: calls.append(version)),
+    )
+    window.startup_update_key = "2026-11-18/boot-a"
+    window.check_updates(manual=False)
+    qtbot.waitUntil(lambda: window.update_running is None)
+    assert len(calls) == 1
+    window.check_updates(manual=False)
+    assert window.update_running is None and len(calls) == 1
+    for key in ("2026-11-19/boot-a", "2026-11-19/boot-b"):
+        window.startup_update_key = key
+        window.check_updates(manual=False)
+        qtbot.waitUntil(lambda: window.update_running is None)
+    assert len(calls) == 3
+    window.check_updates(manual=True)
+    qtbot.waitUntil(lambda: window.update_running is None)
+    assert len(calls) == 4
+    assert window.settings.check.isEnabled()
+
+
+def test_about_check_shows_loading_and_current_status(window, qtbot, monkeypatch):
+    from threading import Event
+    from types import SimpleNamespace
+
+    from pdf_toolbox.updater import Config
+
+    finished = Event()
+    window.update_config = Config("owner/repo", bytes(32), False)
+    monkeypatch.setattr(
+        window,
+        "client",
+        lambda: SimpleNamespace(check=lambda _: (finished.wait(3), None)[1]),
+    )
+    window.about()
+    window.about_check.click()
+    assert window.about_check.text() == "Checking for updates…"
+    assert not window.about_check.isEnabled()
+    finished.set()
+    qtbot.waitUntil(lambda: window.update_running is None)
+    assert window.about_check.isEnabled()
+    assert window.about_status.text() == "This version is current."
+    window.about_dialog.reject()
+
+
+def test_update_now_downloads_and_launches_without_second_click(
+    window, qtbot, tmp_path, monkeypatch
+):
+    from types import SimpleNamespace
+
+    source = tmp_path / "PDF-Toolbox-Setup-x64.exe"
+    source.write_bytes(b"simulated verified installer")
+    window.release = SimpleNamespace(manifest=SimpleNamespace(version="0.2.2"))
+    downloads = []
+    launches = []
+    monkeypatch.setattr(app, "PACKAGED", True)
+    monkeypatch.setattr(app, "verify_file", lambda *args: None)
+    monkeypatch.setattr(app.subprocess, "Popen", lambda args: launches.append(args))
+    monkeypatch.setattr(window, "confirm", lambda *_: pytest.fail("Unexpected second confirmation"))
+
+    def download(release, directory, cancel, progress):
+        downloads.append(release)
+        progress(5, 10)
+        return source
+
+    monkeypatch.setattr(window, "client", lambda: SimpleNamespace(download=download))
+    window.offer_update()
+    window.update_notice.update.click()
+    assert window.update_dialog is not None
+    qtbot.waitUntil(lambda: bool(launches))
+    assert len(downloads) == len(launches) == 1
+    assert "/VERYSILENT" in launches[0]
+    assert "/AUTORESTART=1" in launches[0]
+    assert window.prefs.value("pending_upgrade") == "0.2.2"
+
+
+def test_update_now_waits_for_unsaved_changes(window, monkeypatch):
+    from types import SimpleNamespace
+
+    window.release = SimpleNamespace(manifest=SimpleNamespace(version="0.2.2"))
+    window.editor.objects = {0: [Object("Text", 1, 1, 50, 20, text="Pending edits")]}
+    downloads = []
+    monkeypatch.setattr(window, "download_update", lambda: downloads.append(True))
+    monkeypatch.setattr(window, "question", lambda *_: QMessageBox.StandardButton.Cancel)
+    window.start_update()
+    assert not downloads
+    assert window.editor.dirty
