@@ -1,5 +1,7 @@
 # PDF Toolbox
 
+**PDF to Word:** a new sidebar mode accepts ordered PDF batches and appends one embedded image per new page to a separate `.docx` copy using local Microsoft Word Desktop automation. It includes placement settings, schematic preview, progress and cancellation. See [the guide](docs/PDF_TO_WORD.md) for supported layouts and [verification status](docs/PDF_TO_WORD_TEST_REPORT.md) for test coverage.
+
 PDF Toolbox is a local Windows x64 desktop application for combining, splitting, extracting, converting and visually editing PDF pages.
 
 ![PDF Toolbox home](docs/screenshots/dashboard.png)

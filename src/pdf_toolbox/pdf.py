@@ -175,13 +175,14 @@ def render(
     pixels: int | None = None,
     dpi: int = 200,
     transparent: bool = False,
+    max_pixels: int = MAX_PIXELS,
 ) -> Image.Image:
     with locked_page(reference) as page:
         width, height = page.get_size()
         if min(width, height) <= 0:
             raise ValueError("This page has invalid dimensions.")
         scale = pixels / max(width, height) if pixels else dpi / 72
-        if math.ceil(width * scale) * math.ceil(height * scale) > MAX_PIXELS:
+        if math.ceil(width * scale) * math.ceil(height * scale) > max_pixels:
             raise ValueError("The output image is too large. Choose a lower DPI.")
         bitmap = page.render(
             scale=scale,

@@ -16,7 +16,7 @@ data = [
 if (metadata / "update-config.json").is_file():
     data.append((str(metadata / "update-config.json"), "."))
 for name in ("pyside6_essentials", "shiboken6", "pypdf-", "pypdfium2", "pillow-", "cryptography",
-             "cffi-", "pycparser-", "pywin32_ctypes"):
+             "cffi-", "pycparser-", "pywin32_ctypes", "pywin32-"):
     for package in runtime.glob(f"{name}*.dist-info"):
         for license_dir in package.glob("licenses"):
             data.append((str(license_dir), f"licenses/{package.name}"))
@@ -30,7 +30,8 @@ analysis = Analysis(
     [str(root / "src" / "main.py")],
     pathex=[str(root / "src")],
     datas=data,
-    hiddenimports=["win32ctypes.core.ctypes._authentication", "win32ctypes.core.cffi._authentication"],
+    hiddenimports=["win32ctypes.core.ctypes._authentication", "win32ctypes.core.cffi._authentication",
+                   "pythoncom", "pywintypes", "win32com.client", "win32com.server", "win32file"],
 )
 # Qt imports the Windows system ICU API. A different ICU DLL can have the same
 # name on the build machine's PATH while exposing versioned, incompatible symbols.

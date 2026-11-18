@@ -69,6 +69,7 @@ from .updater import Config, Credentials, GitHub, UpdateError, verify_file
 from .update_ui import UpdateNotice, startup_check_key
 from .viewer import local_paths
 from .workspace import ORGANIZE, TOOLS, Workspace
+from .word_ui import WORD_TOOL, WordPanel
 
 RESOURCE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
 PACKAGED = bool(getattr(sys, "frozen", False))
@@ -96,6 +97,7 @@ NAV_ICONS = dict(
         strict=True,
     )
 )
+NAV_ICONS[WORD_TOOL] = "paper"
 TOOL_TONES = ("pistachio", "rose", "lilac", "butter", "rose", "organize")
 
 
@@ -264,7 +266,15 @@ class Window(QMainWindow):
         self.editor_view = self.build_editor()
         self.empty_tool = EmptyTool(self.browse)
         self.settings = Settings(self)
-        for panel in [self.home, self.workspace, self.editor_view, self.empty_tool, self.settings]:
+        self.word_panel = WordPanel(self)
+        for panel in [
+            self.home,
+            self.workspace,
+            self.editor_view,
+            self.empty_tool,
+            self.settings,
+            self.word_panel,
+        ]:
             self.stack.addWidget(panel)
         self.workspace.browse.connect(self.browse)
         self.workspace.browse_range.connect(self.browse_range)
@@ -306,14 +316,17 @@ class Window(QMainWindow):
             [
                 ("Home", lambda: self.show_panel(self.home)),
                 *[(tool, lambda _checked, name=tool: self.select_tool(name)) for tool in TOOLS],
+                (WORD_TOOL, lambda: self.select_tool(WORD_TOOL)),
                 ("Settings", lambda: self.show_panel(self.settings)),
                 ("About", self.about),
             ]
         ):
-            if index == len(TOOLS) + 1:
+            if label == "Settings":
                 nav.addStretch()
             button = QPushButton(label)
             button.setObjectName("NavButton")
+            if label == WORD_TOOL:
+                button.setToolTip("Append PDF page images to a copy of a Word document.")
             button.setIconSize(QSize(20, 20))
             button.clicked.connect(action)
             self.nav_buttons[label] = button
@@ -518,6 +531,10 @@ class Window(QMainWindow):
         self.editor_status()
         describe_buttons(self, self)
         describe_button(self.settings.folder, self, "Choose folder…")
+        self.nav_buttons[WORD_TOOL].setToolTip(
+            "Append PDF page images to a copy of a Word document."
+        )
+        self.nav_buttons[WORD_TOOL].setCursor(Qt.CursorShape.PointingHandCursor)
 
     def filter_tools(self, query):
         query = query.casefold().strip()
@@ -537,9 +554,12 @@ class Window(QMainWindow):
         if panel is self.workspace:
             active = self.workspace.mode
         else:
-            active = {self.home: "Home", self.settings: "Settings", self.editor_view: TOOLS[4]}.get(
-                panel
-            )
+            active = {
+                self.home: "Home",
+                self.settings: "Settings",
+                self.editor_view: TOOLS[4],
+                self.word_panel: WORD_TOOL,
+            }.get(panel)
         for name, button in self.nav_buttons.items():
             selected = name == active
             if button.property("active") != selected:
@@ -582,6 +602,11 @@ class Window(QMainWindow):
     def select_tool(self, tool, files=None):
         if self.busy:
             self.notice("Wait for the current PDF operation to finish.")
+            return
+        if tool == WORD_TOOL:
+            self.show_panel(self.word_panel)
+            if files:
+                self.word_panel.add_files(files)
             return
         if tool == TOOLS[4]:
             self.show_tool_page(self.editor_view)
@@ -672,6 +697,15 @@ class Window(QMainWindow):
         pdfs = [path for path in paths if path.suffix.lower() == ".pdf"]
         images = [path for path in paths if path.suffix.lower() in IMAGE_TYPES]
         current = self.active_panel()
+        if current is self.word_panel:
+            docs = [path for path in paths if path.suffix.lower() == ".docx"]
+            if docs and pdfs:
+                self.word_panel.status.setText("Add PDFs and select Word separately.")
+            elif docs:
+                self.word_panel.select_word(docs)
+            else:
+                self.word_panel.add_files(paths)
+            return
         if current == self.home and (pdfs or images):
             self.suggest(pdfs, images)
             return
@@ -1361,6 +1395,7 @@ def main():
 
 
 def verify_bundled_runtime():
+    import importlib
     from contextlib import closing
     from tempfile import TemporaryDirectory
 
@@ -1368,6 +1403,9 @@ def verify_bundled_runtime():
 
     from .editor import Object, make_overlay
     from .pdf import locked_page, render
+
+    for module in ("pythoncom", "pywintypes", "win32com.client", "win32file"):
+        importlib.import_module(module)
 
     with TemporaryDirectory() as temporary:
         root = Path(temporary)

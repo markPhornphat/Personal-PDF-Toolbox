@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+- Added local batch PDF-to-Word conversion with ordered PDF intake, placement controls, a bounded schematic preview, progress and cancellation. Microsoft Word Desktop is required for this mode.
+- Added isolated Word automation, original-package preservation, embedded images and validation of page counts, image placement, original content, source integrity and reopening.
+- Added pinned pywin32 and bundled COM runtime support. Existing PDF tools and the opt-in updater retain their existing boundaries.
+- Verified the automated suite and four real Word integration cases. Header/footer tables, floating objects and other unmeasurable layouts are rejected safely; broader document-corpus and clean-machine acceptance remain pending. See `docs/PDF_TO_WORD_TEST_REPORT.md`.
+
 ## 0.2.1
 
 - Added an illustrated About dialog and centered the theme shortcut beside Settings.

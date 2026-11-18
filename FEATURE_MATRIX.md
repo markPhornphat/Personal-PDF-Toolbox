@@ -2,6 +2,7 @@
 
 | Feature | Priority | Implementation | Verification | Remaining work | Version |
 | --- | --- | --- | --- | --- | --- |
+| PDF to Word | P0 | Ordered batch PDFs, local Word COM, safe placement, schematic preview, staged original-package preservation, progress/cancel and output actions | Ruff/format/mypy passed; 50 standard tests and four real Word cases passed; synthetic 10/25/50/100/200-page benchmarks, screenshot, installer build and bundled startup completed | Broader Word corpus, header/footer tables/floating-object geometry and packaged clean-machine acceptance | 0.3.0 |
 | Desktop interface | P0 | Illustrated About dialog, centered sidebar theme icon, six empty tool pages with PDF drop fields, button tooltips and hand cursors, and short transitions | About actions and centered icon checked in native Windows Qt and at 2× scaling, plus light and dark visual previews | Pilot feedback from Windows users | 0.2.1 |
 | Merge and append | P0 | Document cards, page order, range insertion, duplicate, remove, undo and redo | Eight-page append with reordered pages and original file hash preserved | Native Explorer and page-drag acceptance | 0.1.3 |
 | Split PDF | P0 | Individual pages, fixed-size groups, ranges, boundaries, visual split markers and ZIP | Range and boundary tests, plus two two-page exports from a four-page PDF | Native drag selection and large batches | 0.1.3 |

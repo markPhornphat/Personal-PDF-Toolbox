@@ -1,0 +1,880 @@
+{
+  "project": {
+    "name": "pdf-toolbox",
+    "description": "Local Windows PDF tools; baseline architecture inventory"
+  },
+  "analysisStatus": "partial-file-level",
+  "warnings": [
+    "Not a full semantic symbol graph. No completion metadata or fingerprints generated."
+  ],
+  "nodes": [
+    {
+      "id": "config:.github/workflows/ci.yml",
+      "type": "config",
+      "name": "ci.yml",
+      "filePath": ".github/workflows/ci.yml",
+      "summary": "Repository infra file: .github/workflows/ci.yml.",
+      "tags": [
+        "infra"
+      ]
+    },
+    {
+      "id": "config:.github/workflows/release.yml",
+      "type": "config",
+      "name": "release.yml",
+      "filePath": ".github/workflows/release.yml",
+      "summary": "Repository infra file: .github/workflows/release.yml.",
+      "tags": [
+        "infra"
+      ]
+    },
+    {
+      "id": "document:AGENTS.md",
+      "type": "document",
+      "name": "AGENTS.md",
+      "filePath": "AGENTS.md",
+      "summary": "Repository docs file: AGENTS.md.",
+      "tags": [
+        "docs"
+      ]
+    },
+    {
+      "id": "document:ARCHITECTURE.md",
+      "type": "document",
+      "name": "ARCHITECTURE.md",
+      "filePath": "ARCHITECTURE.md",
+      "summary": "Repository docs file: ARCHITECTURE.md.",
+      "tags": [
+        "docs"
+      ]
+    },
+    {
+      "id": "document:CHANGELOG.md",
+      "type": "document",
+      "name": "CHANGELOG.md",
+      "filePath": "CHANGELOG.md",
+      "summary": "Repository docs file: CHANGELOG.md.",
+      "tags": [
+        "docs"
+      ]
+    },
+    {
+      "id": "document:DEVELOPMENT_PLAN.md",
+      "type": "document",
+      "name": "DEVELOPMENT_PLAN.md",
+      "filePath": "DEVELOPMENT_PLAN.md",
+      "summary": "Repository docs file: DEVELOPMENT_PLAN.md.",
+      "tags": [
+        "docs"
+      ]
+    },
+    {
+      "id": "document:FEATURE_MATRIX.md",
+      "type": "document",
+      "name": "FEATURE_MATRIX.md",
+      "filePath": "FEATURE_MATRIX.md",
+      "summary": "Repository docs file: FEATURE_MATRIX.md.",
+      "tags": [
+        "docs"
+      ]
+    },
+    {
+      "id": "document:PERFORMANCE_REPORT.md",
+      "type": "document",
+      "name": "PERFORMANCE_REPORT.md",
+      "filePath": "PERFORMANCE_REPORT.md",
+      "summary": "Repository docs file: PERFORMANCE_REPORT.md.",
+      "tags": [
+        "docs"
+      ]
+    },
+    {
+      "id": "document:README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "README.md",
+      "summary": "Repository docs file: README.md.",
+      "tags": [
+        "docs"
+      ]
+    },
+    {
+      "id": "document:RELEASE_GUIDE.md",
+      "type": "document",
+      "name": "RELEASE_GUIDE.md",
+      "filePath": "RELEASE_GUIDE.md",
+      "summary": "Repository docs file: RELEASE_GUIDE.md.",
+      "tags": [
+        "docs"
+      ]
+    },
+    {
+      "id": "document:SECURITY_REVIEW.md",
+      "type": "document",
+      "name": "SECURITY_REVIEW.md",
+      "filePath": "SECURITY_REVIEW.md",
+      "summary": "Repository docs file: SECURITY_REVIEW.md.",
+      "tags": [
+        "docs"
+      ]
+    },
+    {
+      "id": "document:TEST_PLAN.md",
+      "type": "document",
+      "name": "TEST_PLAN.md",
+      "filePath": "TEST_PLAN.md",
+      "summary": "Repository docs file: TEST_PLAN.md.",
+      "tags": [
+        "docs"
+      ]
+    },
+    {
+      "id": "document:TEST_REPORT.md",
+      "type": "document",
+      "name": "TEST_REPORT.md",
+      "filePath": "TEST_REPORT.md",
+      "summary": "Repository docs file: TEST_REPORT.md.",
+      "tags": [
+        "docs"
+      ]
+    },
+    {
+      "id": "document:THIRD_PARTY_LICENSES.md",
+      "type": "document",
+      "name": "THIRD_PARTY_LICENSES.md",
+      "filePath": "THIRD_PARTY_LICENSES.md",
+      "summary": "Repository docs file: THIRD_PARTY_LICENSES.md.",
+      "tags": [
+        "docs"
+      ]
+    },
+    {
+      "id": "document:UPDATER_SETUP.md",
+      "type": "document",
+      "name": "UPDATER_SETUP.md",
+      "filePath": "UPDATER_SETUP.md",
+      "summary": "Repository docs file: UPDATER_SETUP.md.",
+      "tags": [
+        "docs"
+      ]
+    },
+    {
+      "id": "document:UPDATE_ARCHITECTURE.md",
+      "type": "document",
+      "name": "UPDATE_ARCHITECTURE.md",
+      "filePath": "UPDATE_ARCHITECTURE.md",
+      "summary": "Repository docs file: UPDATE_ARCHITECTURE.md.",
+      "tags": [
+        "docs"
+      ]
+    },
+    {
+      "id": "document:USER_GUIDE.md",
+      "type": "document",
+      "name": "USER_GUIDE.md",
+      "filePath": "USER_GUIDE.md",
+      "summary": "Repository docs file: USER_GUIDE.md.",
+      "tags": [
+        "docs"
+      ]
+    },
+    {
+      "id": "document:USER_GUIDE_TH.md",
+      "type": "document",
+      "name": "USER_GUIDE_TH.md",
+      "filePath": "USER_GUIDE_TH.md",
+      "summary": "Repository docs file: USER_GUIDE_TH.md.",
+      "tags": [
+        "docs"
+      ]
+    },
+    {
+      "id": "config:installer/pdf-toolbox.iss",
+      "type": "config",
+      "name": "pdf-toolbox.iss",
+      "filePath": "installer/pdf-toolbox.iss",
+      "summary": "Repository code file: installer/pdf-toolbox.iss.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "config:packaging/pdf-toolbox.spec",
+      "type": "config",
+      "name": "pdf-toolbox.spec",
+      "filePath": "packaging/pdf-toolbox.spec",
+      "summary": "Repository code file: packaging/pdf-toolbox.spec.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "config:pyproject.toml",
+      "type": "config",
+      "name": "pyproject.toml",
+      "filePath": "pyproject.toml",
+      "summary": "Repository config file: pyproject.toml.",
+      "tags": [
+        "config"
+      ]
+    },
+    {
+      "id": "config:resources/fonts/OFL-NotoSansThai.txt",
+      "type": "config",
+      "name": "OFL-NotoSansThai.txt",
+      "filePath": "resources/fonts/OFL-NotoSansThai.txt",
+      "summary": "Repository docs file: resources/fonts/OFL-NotoSansThai.txt.",
+      "tags": [
+        "docs"
+      ]
+    },
+    {
+      "id": "config:resources/fonts/OFL-Nunito.txt",
+      "type": "config",
+      "name": "OFL-Nunito.txt",
+      "filePath": "resources/fonts/OFL-Nunito.txt",
+      "summary": "Repository docs file: resources/fonts/OFL-Nunito.txt.",
+      "tags": [
+        "docs"
+      ]
+    },
+    {
+      "id": "file:scripts/benchmark.py",
+      "type": "file",
+      "name": "benchmark.py",
+      "filePath": "scripts/benchmark.py",
+      "summary": "Repository code file: scripts/benchmark.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "config:scripts/build.ps1",
+      "type": "config",
+      "name": "build.ps1",
+      "filePath": "scripts/build.ps1",
+      "summary": "Repository script file: scripts/build.ps1.",
+      "tags": [
+        "script"
+      ]
+    },
+    {
+      "id": "file:scripts/build_metadata.py",
+      "type": "file",
+      "name": "build_metadata.py",
+      "filePath": "scripts/build_metadata.py",
+      "summary": "Repository code file: scripts/build_metadata.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "file:scripts/capture_screenshots.py",
+      "type": "file",
+      "name": "capture_screenshots.py",
+      "filePath": "scripts/capture_screenshots.py",
+      "summary": "Repository code file: scripts/capture_screenshots.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "config:scripts/install-compiler.ps1",
+      "type": "config",
+      "name": "install-compiler.ps1",
+      "filePath": "scripts/install-compiler.ps1",
+      "summary": "Repository script file: scripts/install-compiler.ps1.",
+      "tags": [
+        "script"
+      ]
+    },
+    {
+      "id": "config:scripts/publish-release.ps1",
+      "type": "config",
+      "name": "publish-release.ps1",
+      "filePath": "scripts/publish-release.ps1",
+      "summary": "Repository script file: scripts/publish-release.ps1.",
+      "tags": [
+        "script"
+      ]
+    },
+    {
+      "id": "file:scripts/sign_release.py",
+      "type": "file",
+      "name": "sign_release.py",
+      "filePath": "scripts/sign_release.py",
+      "summary": "Repository code file: scripts/sign_release.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "config:scripts/smoke-install.ps1",
+      "type": "config",
+      "name": "smoke-install.ps1",
+      "filePath": "scripts/smoke-install.ps1",
+      "summary": "Repository script file: scripts/smoke-install.ps1.",
+      "tags": [
+        "script"
+      ]
+    },
+    {
+      "id": "file:src/main.py",
+      "type": "file",
+      "name": "main.py",
+      "filePath": "src/main.py",
+      "summary": "Repository code file: src/main.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "file:src/pdf_toolbox/__init__.py",
+      "type": "file",
+      "name": "__init__.py",
+      "filePath": "src/pdf_toolbox/__init__.py",
+      "summary": "Repository code file: src/pdf_toolbox/__init__.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "file:src/pdf_toolbox/app.py",
+      "type": "file",
+      "name": "app.py",
+      "filePath": "src/pdf_toolbox/app.py",
+      "summary": "Repository code file: src/pdf_toolbox/app.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "file:src/pdf_toolbox/appearance.py",
+      "type": "file",
+      "name": "appearance.py",
+      "filePath": "src/pdf_toolbox/appearance.py",
+      "summary": "Repository code file: src/pdf_toolbox/appearance.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "file:src/pdf_toolbox/editor.py",
+      "type": "file",
+      "name": "editor.py",
+      "filePath": "src/pdf_toolbox/editor.py",
+      "summary": "Repository code file: src/pdf_toolbox/editor.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "file:src/pdf_toolbox/jobs.py",
+      "type": "file",
+      "name": "jobs.py",
+      "filePath": "src/pdf_toolbox/jobs.py",
+      "summary": "Repository code file: src/pdf_toolbox/jobs.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "file:src/pdf_toolbox/localization.py",
+      "type": "file",
+      "name": "localization.py",
+      "filePath": "src/pdf_toolbox/localization.py",
+      "summary": "Repository code file: src/pdf_toolbox/localization.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "file:src/pdf_toolbox/pdf.py",
+      "type": "file",
+      "name": "pdf.py",
+      "filePath": "src/pdf_toolbox/pdf.py",
+      "summary": "Repository code file: src/pdf_toolbox/pdf.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "file:src/pdf_toolbox/progress.py",
+      "type": "file",
+      "name": "progress.py",
+      "filePath": "src/pdf_toolbox/progress.py",
+      "summary": "Repository code file: src/pdf_toolbox/progress.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "file:src/pdf_toolbox/settings.py",
+      "type": "file",
+      "name": "settings.py",
+      "filePath": "src/pdf_toolbox/settings.py",
+      "summary": "Repository code file: src/pdf_toolbox/settings.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "file:src/pdf_toolbox/update_ui.py",
+      "type": "file",
+      "name": "update_ui.py",
+      "filePath": "src/pdf_toolbox/update_ui.py",
+      "summary": "Repository code file: src/pdf_toolbox/update_ui.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "file:src/pdf_toolbox/updater.py",
+      "type": "file",
+      "name": "updater.py",
+      "filePath": "src/pdf_toolbox/updater.py",
+      "summary": "Repository code file: src/pdf_toolbox/updater.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "file:src/pdf_toolbox/viewer.py",
+      "type": "file",
+      "name": "viewer.py",
+      "filePath": "src/pdf_toolbox/viewer.py",
+      "summary": "Repository code file: src/pdf_toolbox/viewer.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "file:src/pdf_toolbox/workspace.py",
+      "type": "file",
+      "name": "workspace.py",
+      "filePath": "src/pdf_toolbox/workspace.py",
+      "summary": "Repository code file: src/pdf_toolbox/workspace.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "file:tests/test_gui.py",
+      "type": "file",
+      "name": "test_gui.py",
+      "filePath": "tests/test_gui.py",
+      "summary": "Repository code file: tests/test_gui.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "file:tests/test_pdf.py",
+      "type": "file",
+      "name": "test_pdf.py",
+      "filePath": "tests/test_pdf.py",
+      "summary": "Repository code file: tests/test_pdf.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "file:tests/test_update_download.py",
+      "type": "file",
+      "name": "test_update_download.py",
+      "filePath": "tests/test_update_download.py",
+      "summary": "Repository code file: tests/test_update_download.py.",
+      "tags": [
+        "code"
+      ]
+    },
+    {
+      "id": "file:tests/test_updater.py",
+      "type": "file",
+      "name": "test_updater.py",
+      "filePath": "tests/test_updater.py",
+      "summary": "Repository code file: tests/test_updater.py.",
+      "tags": [
+        "code"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:scripts/benchmark.py",
+      "target": "file:src/pdf_toolbox/pdf.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:scripts/capture_screenshots.py",
+      "target": "file:src/pdf_toolbox/app.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:scripts/capture_screenshots.py",
+      "target": "file:src/pdf_toolbox/editor.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:scripts/capture_screenshots.py",
+      "target": "file:src/pdf_toolbox/workspace.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:scripts/sign_release.py",
+      "target": "file:src/pdf_toolbox/updater.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/main.py",
+      "target": "file:src/pdf_toolbox/app.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/app.py",
+      "target": "file:src/pdf_toolbox/appearance.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/app.py",
+      "target": "file:src/pdf_toolbox/editor.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/app.py",
+      "target": "file:src/pdf_toolbox/jobs.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/app.py",
+      "target": "file:src/pdf_toolbox/pdf.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/app.py",
+      "target": "file:src/pdf_toolbox/localization.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/app.py",
+      "target": "file:src/pdf_toolbox/progress.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/app.py",
+      "target": "file:src/pdf_toolbox/settings.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/app.py",
+      "target": "file:src/pdf_toolbox/updater.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/app.py",
+      "target": "file:src/pdf_toolbox/update_ui.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/app.py",
+      "target": "file:src/pdf_toolbox/viewer.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/app.py",
+      "target": "file:src/pdf_toolbox/workspace.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/editor.py",
+      "target": "file:src/pdf_toolbox/appearance.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/editor.py",
+      "target": "file:src/pdf_toolbox/localization.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/editor.py",
+      "target": "file:src/pdf_toolbox/pdf.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/editor.py",
+      "target": "file:src/pdf_toolbox/viewer.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/jobs.py",
+      "target": "file:src/pdf_toolbox/pdf.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/progress.py",
+      "target": "file:src/pdf_toolbox/appearance.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/progress.py",
+      "target": "file:src/pdf_toolbox/localization.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/settings.py",
+      "target": "file:src/pdf_toolbox/localization.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/settings.py",
+      "target": "file:src/pdf_toolbox/updater.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/update_ui.py",
+      "target": "file:src/pdf_toolbox/appearance.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/update_ui.py",
+      "target": "file:src/pdf_toolbox/localization.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/updater.py",
+      "target": "file:src/pdf_toolbox/pdf.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/viewer.py",
+      "target": "file:src/pdf_toolbox/appearance.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/viewer.py",
+      "target": "file:src/pdf_toolbox/localization.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/viewer.py",
+      "target": "file:src/pdf_toolbox/pdf.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/workspace.py",
+      "target": "file:src/pdf_toolbox/appearance.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/workspace.py",
+      "target": "file:src/pdf_toolbox/localization.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/workspace.py",
+      "target": "file:src/pdf_toolbox/pdf.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/pdf_toolbox/workspace.py",
+      "target": "file:src/pdf_toolbox/viewer.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/test_gui.py",
+      "target": "file:src/pdf_toolbox/editor.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/test_gui.py",
+      "target": "file:src/pdf_toolbox/pdf.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/test_gui.py",
+      "target": "file:src/pdf_toolbox/workspace.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/test_gui.py",
+      "target": "file:src/pdf_toolbox/updater.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/test_pdf.py",
+      "target": "file:src/pdf_toolbox/pdf.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/test_update_download.py",
+      "target": "file:src/pdf_toolbox/pdf.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/test_update_download.py",
+      "target": "file:src/pdf_toolbox/updater.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/test_updater.py",
+      "target": "file:src/pdf_toolbox/updater.py",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:tests/test_updater.py",
+      "target": "file:src/pdf_toolbox/update_ui.py",
+      "type": "imports",
+      "weight": 0.7
+    }
+  ],
+  "layers": [
+    {
+      "id": "build-and-release",
+      "name": "Build and release",
+      "description": "Build and release",
+      "nodeIds": [
+        "config:.github/workflows/ci.yml",
+        "config:.github/workflows/release.yml",
+        "config:installer/pdf-toolbox.iss",
+        "config:packaging/pdf-toolbox.spec",
+        "file:scripts/benchmark.py",
+        "config:scripts/build.ps1",
+        "file:scripts/build_metadata.py",
+        "file:scripts/capture_screenshots.py",
+        "config:scripts/install-compiler.ps1",
+        "config:scripts/publish-release.ps1",
+        "file:scripts/sign_release.py",
+        "config:scripts/smoke-install.ps1"
+      ]
+    },
+    {
+      "id": "documentation-and-configuration",
+      "name": "Documentation and configuration",
+      "description": "Documentation and configuration",
+      "nodeIds": [
+        "document:AGENTS.md",
+        "document:ARCHITECTURE.md",
+        "document:CHANGELOG.md",
+        "document:DEVELOPMENT_PLAN.md",
+        "document:FEATURE_MATRIX.md",
+        "document:PERFORMANCE_REPORT.md",
+        "document:README.md",
+        "document:RELEASE_GUIDE.md",
+        "document:SECURITY_REVIEW.md",
+        "document:TEST_PLAN.md",
+        "document:TEST_REPORT.md",
+        "document:THIRD_PARTY_LICENSES.md",
+        "document:UPDATER_SETUP.md",
+        "document:UPDATE_ARCHITECTURE.md",
+        "document:USER_GUIDE.md",
+        "document:USER_GUIDE_TH.md",
+        "config:pyproject.toml",
+        "config:resources/fonts/OFL-NotoSansThai.txt",
+        "config:resources/fonts/OFL-Nunito.txt"
+      ]
+    },
+    {
+      "id": "application",
+      "name": "Application",
+      "description": "Application",
+      "nodeIds": [
+        "file:src/main.py",
+        "file:src/pdf_toolbox/__init__.py",
+        "file:src/pdf_toolbox/app.py",
+        "file:src/pdf_toolbox/appearance.py",
+        "file:src/pdf_toolbox/editor.py",
+        "file:src/pdf_toolbox/jobs.py",
+        "file:src/pdf_toolbox/localization.py",
+        "file:src/pdf_toolbox/pdf.py",
+        "file:src/pdf_toolbox/progress.py",
+        "file:src/pdf_toolbox/settings.py",
+        "file:src/pdf_toolbox/update_ui.py",
+        "file:src/pdf_toolbox/updater.py",
+        "file:src/pdf_toolbox/viewer.py",
+        "file:src/pdf_toolbox/workspace.py"
+      ]
+    },
+    {
+      "id": "tests",
+      "name": "Tests",
+      "description": "Tests",
+      "nodeIds": [
+        "file:tests/test_gui.py",
+        "file:tests/test_pdf.py",
+        "file:tests/test_update_download.py",
+        "file:tests/test_updater.py"
+      ]
+    }
+  ],
+  "tour": [
+    {
+      "title": "Application entry",
+      "description": "Inspect startup and the desktop routing surface.",
+      "nodeIds": [
+        "file:src/main.py",
+        "file:src/pdf_toolbox/app.py"
+      ]
+    },
+    {
+      "title": "Local processing",
+      "description": "Follow rasterization and background job delivery.",
+      "nodeIds": [
+        "file:src/pdf_toolbox/pdf.py",
+        "file:src/pdf_toolbox/jobs.py"
+      ]
+    },
+    {
+      "title": "Opt-in updater and packaging",
+      "description": "Inspect the isolated network surface and Windows bundle.",
+      "nodeIds": [
+        "file:src/pdf_toolbox/updater.py",
+        "config:packaging/pdf-toolbox.spec",
+        "config:scripts/build.ps1"
+      ]
+    }
+  ]
+}

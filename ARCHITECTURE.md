@@ -8,4 +8,6 @@
 - `updater.py` contains GitHub HTTP access, artifact verification and token storage. It has its own worker queue. PDF jobs pass no data to that subsystem.
 - `pyproject.toml` is the authoritative application version. Build scripts derive the executable metadata, installer version, About display and release version from it.
 
-Qt PDF output covers the P0 overlay requirement, so the initial runtime can use PySide6 Essentials and omit ReportLab, QPDF, OCR and Office components.
+Qt PDF output covers the P0 overlay requirement without ReportLab, QPDF or OCR.
+
+The PDF-to-Word sidebar panel (`word_ui.py`) reuses Jobs and PDFium/Pillow. `word_layout.py` calculates point-based safe rectangles. `word_conversion.py` validates ordered inputs, renders one page at a time, manages cancellation and stages output. `word_com.py` creates a private thread-affine Word COM instance, inspects layout, anchors embedded images and validates pagination/geometry. `word_package.py` adds Word-generated appended paragraphs/media to the original OOXML package, preserving original parts, styles and sections. The result is reopened read-only in Word before publication. Office is required only when using this mode; COM imports are lazy. The existing updater is untouched. Verification limitations are recorded in `docs/PDF_TO_WORD_TEST_REPORT.md`.

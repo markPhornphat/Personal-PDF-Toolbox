@@ -1,0 +1,57 @@
+[
+  {
+    "pages": 10,
+    "total_seconds": 9.713651099999993,
+    "render_seconds": 0.5492199999998775,
+    "word_insert_seconds": 4.012475799999834,
+    "validate_reopen_publish_seconds": 3.8530289000000266,
+    "average_cpu_percent_of_one_core": 80.26719221982356,
+    "peak_ram_upper_bound_bytes": 468905984,
+    "output_bytes": 13443,
+    "workload": "blank portrait A4 PDF, 300 DPI JPEG; synthetic baseline only"
+  },
+  {
+    "pages": 25,
+    "total_seconds": 22.533583499999963,
+    "render_seconds": 1.6591773000000103,
+    "word_insert_seconds": 13.857333799999878,
+    "validate_reopen_publish_seconds": 5.819246900000053,
+    "average_cpu_percent_of_one_core": 104.01141922233558,
+    "peak_ram_upper_bound_bytes": 485724160,
+    "output_bytes": 14590,
+    "workload": "blank portrait A4 PDF, 300 DPI JPEG; synthetic baseline only"
+  },
+  {
+    "pages": 50,
+    "total_seconds": 57.476729899999896,
+    "render_seconds": 4.443644100000142,
+    "word_insert_seconds": 39.30412939999974,
+    "validate_reopen_publish_seconds": 11.192948300000012,
+    "average_cpu_percent_of_one_core": 100.33952018554226,
+    "peak_ram_upper_bound_bytes": 495009792,
+    "output_bytes": 16435,
+    "workload": "blank portrait A4 PDF, 300 DPI JPEG; synthetic baseline only"
+  },
+  {
+    "pages": 100,
+    "total_seconds": 95.25639799999999,
+    "render_seconds": 8.261920700000019,
+    "word_insert_seconds": 66.17258979999963,
+    "validate_reopen_publish_seconds": 17.95351800000003,
+    "average_cpu_percent_of_one_core": 105.3078870355774,
+    "peak_ram_upper_bound_bytes": 526479360,
+    "output_bytes": 19986,
+    "workload": "blank portrait A4 PDF, 300 DPI JPEG; synthetic baseline only"
+  },
+  {
+    "pages": 200,
+    "total_seconds": 155.27064640000003,
+    "render_seconds": 16.017227800000683,
+    "word_insert_seconds": 115.1717240000005,
+    "validate_reopen_publish_seconds": 21.399133099999972,
+    "average_cpu_percent_of_one_core": 110.23091226082508,
+    "peak_ram_upper_bound_bytes": 651517952,
+    "output_bytes": 27021,
+    "workload": "blank portrait A4 PDF, 300 DPI JPEG; synthetic baseline only"
+  }
+]
