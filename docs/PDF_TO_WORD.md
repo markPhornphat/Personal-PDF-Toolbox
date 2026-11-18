@@ -2,18 +2,18 @@
 
 This mode appends PDF page images to a separate copy of an existing `.docx` document. PDF rendering and Word automation run locally. Microsoft Word Desktop must be installed and activated. PDF-to-Image and the other PDF tools do not require Word.
 
-![PDF to Word interface with synthetic documents](images/pdf-to-word.png)
+[View the empty intake screen](images/pdf-to-word-intake.png) or the [insertion workspace with Word-rendered header and footer bands](images/pdf-to-word.png).
 
 ## Use
 
 1. Choose **PDF to Word** in the sidebar.
-2. Drop PDFs into the file list or click **Add PDFs**. Drag rows to change their order. **Natural sort** orders names such as `2.pdf` before `10.pdf`. Remove selected rows or clear the list as needed.
-3. Select an existing `.docx` using its separate drop area or browse button. Close that document in Word first. Inspection uses a disposable copy and Word's pagination engine.
-4. Review the PDF page total and expected final Word page count. The preview is explicitly schematic, uses one small rendered PDF image at a time, and does not represent an actual Word-rendered output page.
-5. Choose horizontal/vertical alignment. Defaults are center/bottom. Advanced settings expose 150/200/300/600 DPI, JPEG/PNG, JPEG quality, scale and extra safety margin. Defaults are 300 DPI JPEG, quality 95, 100% fit, and 5 mm. Scale above 100% is capped to the available safe area. Aspect ratio and header/footer protection cannot be disabled.
+2. Drop PDFs and an existing `.docx` into their separate fields, or use the browse buttons. Close the template in Word first. Inspection uses a disposable copy and Word's pagination engine.
+3. The insertion workspace opens when both inputs are ready. Drag the six-dot handle on a PDF card to change its processing order. Use **Add PDFs**, **Remove**, **Clear**, or **Natural sort** to adjust the list.
+4. Review the PDF page total and expected final Word page count. The schematic shows one PDF page at a time. Word renders the header and footer from three temporary appended pages, so the preview preserves text positions, tab stops, formatting, and supported inline artwork. Later pages reuse the matching sample for their parity. Dynamic page numbers and totals can differ from the saved document.
+5. Horizontal and vertical alignment both default to **Center**. Advanced settings include DPI, image format, JPEG quality, scale, and extra safety margin.
 6. Choose an output directory and filename. The default is `{word_name}_with_images.docx`. An existing output prompts for overwrite or a new name. An input file can never be the output.
-7. Click **Generate Word Document**. Progress shows the current stage, PDF/page, completed images/pages, elapsed time and an estimate once pages have completed. Cancel requests are handled between operations; an active Word call is allowed to return.
-8. Open the generated document or output folder from the success actions.
+7. Click **Generate Word Document**. The progress dialog shows the mascot and progress bar. Expand **Show details** for the current stage, page, and elapsed time. You can cancel between Word operations.
+8. Use the completion dialog to open the document, open its folder, or start a new conversion.
 
 ## Processing and preservation
 

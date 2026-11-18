@@ -7,7 +7,7 @@ import time
 import tomllib
 from pathlib import Path
 
-from PySide6.QtCore import QEasingCurve, QEvent, QPropertyAnimation, QSize, QStandardPaths
+from PySide6.QtCore import QEasingCurve, QEvent, QPropertyAnimation, QSize
 from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QActionGroup, QColor, QDesktopServices, QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
@@ -282,6 +282,8 @@ class Window(QMainWindow):
         self.workspace.pages_changed.connect(self.refresh_tool_page)
         self.empty_tool.drop.files.connect(self.accept_files)
         self.workspace.failed.connect(self.alert)
+        self.workspace.viewer.failed.connect(self.alert)
+        self.editor.viewer.failed.connect(self.alert)
         self.workspace.run_requested.connect(self.run_workspace)
         self.editor.alert.connect(self.alert)
         self.editor.open_requested.connect(self.accept_files)
@@ -446,7 +448,7 @@ class Window(QMainWindow):
         panel = QVBoxLayout(wrap)
         buttons = QHBoxLayout()
         title = QLabel("Edit PDF")
-        title.setObjectName("Heading")
+        title.setObjectName("DetailHeading")
         buttons.addWidget(title)
         self.editor_label = QLabel()
         buttons.addWidget(self.editor_label)
@@ -700,7 +702,7 @@ class Window(QMainWindow):
         if current is self.word_panel:
             docs = [path for path in paths if path.suffix.lower() == ".docx"]
             if docs and pdfs:
-                self.word_panel.status.setText("Add PDFs and select Word separately.")
+                self.alert("Drop PDFs and the Word template into their separate fields.")
             elif docs:
                 self.word_panel.select_word(docs)
             else:
@@ -931,11 +933,13 @@ class Window(QMainWindow):
         elif selected == QMessageBox.StandardButton.Discard:
             proceed()
 
-    def run_job(self, work, label, done):
+    def run_job(self, work, label, done, *, show_details=False):
         if self.busy:
             return
         self.notice(label, 0)
-        dialog = ProcessingDialog(self, label, self.drop.mascot.pixmap, self.theme_palette)
+        dialog = ProcessingDialog(
+            self, label, self.drop.mascot.pixmap, self.theme_palette, show_details=show_details
+        )
         dialog.cancel_requested.connect(self.cancel_work)
         self.processing = dialog
 
@@ -954,7 +958,15 @@ class Window(QMainWindow):
             ):
                 self.offer_update()
 
-        self.busy = self.jobs.submit(work, finish, dialog.report)
+        def finished(value, error):
+            if show_details and error is None and dialog.dog.animate:
+                dialog.cancel.setEnabled(False)
+                dialog.transition.finished.connect(lambda: finish(value, error))
+                dialog.report(1, 1)
+            else:
+                finish(value, error)
+
+        self.busy = self.jobs.submit(work, finished, dialog.report)
         dialog.open()
 
     def progress_value(self, current, total):
@@ -1003,15 +1015,29 @@ class Window(QMainWindow):
     def notice(self, text, timeout=8000):
         self.statusBar().showMessage(tr(self, text), timeout)
 
+    def mascot_message(self, icon, title, text):
+        box = QMessageBox(icon, tr(self, title), tr(self, text), parent=self)
+        box.setTextFormat(Qt.TextFormat.PlainText)
+        box.setIconPixmap(
+            self.drop.mascot.pixmap.scaled(
+                76,
+                76,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
+        return box
+
     def alert(self, text):
         button = QMessageBox.StandardButton.Ok
-        box = QMessageBox(QMessageBox.Icon.Warning, "PDF Toolbox", tr(self, text), button, self)
-        box.setTextFormat(Qt.TextFormat.PlainText)
+        box = self.mascot_message(QMessageBox.Icon.Warning, "PDF Toolbox", text)
+        box.setStandardButtons(button)
         localize_buttons(box, button)
-        box.exec()
+        box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        box.open()
 
     def question(self, title, text, default, *buttons):
-        box = QMessageBox(QMessageBox.Icon.Question, tr(self, title), tr(self, text), parent=self)
+        box = self.mascot_message(QMessageBox.Icon.Question, title, text)
         for button in buttons:
             box.addButton(button)
         localize_buttons(box, *buttons)
@@ -1019,7 +1045,9 @@ class Window(QMainWindow):
         box.setTextFormat(Qt.TextFormat.PlainText)
         box.exec()
         clicked = box.clickedButton()
-        return box.standardButton(clicked) if clicked else QMessageBox.StandardButton.NoButton
+        result = box.standardButton(clicked) if clicked else QMessageBox.StandardButton.NoButton
+        box.deleteLater()
+        return result
 
     def confirm(self, title, text):
         return (
@@ -1175,7 +1203,7 @@ class Window(QMainWindow):
                 self.update_status(status)
                 self.update_check_feedback(False, status)
                 if manual:
-                    self.notice(status)
+                    self.alert(status)
                 return
             if not release:
                 self.update_status("This version is current.")
@@ -1263,9 +1291,12 @@ class Window(QMainWindow):
                 )
                 if isinstance(error, Cancelled):
                     status = "Update cancelled."
+                    self.notice(status)
+                else:
+                    self.alert(status)
                 self.update_status(status)
-                self.notice(status)
-                self.offer_update()
+                if isinstance(error, Cancelled):
+                    self.offer_update()
                 return
             self.installer = path
             self.install_update()
@@ -1373,18 +1404,15 @@ class Window(QMainWindow):
             event.accept()
 
 
-def main():
-    app = QApplication(sys.argv)
+def main(app, splash):
     smoke = "--smoke-test" in sys.argv
-    if smoke:
-        QStandardPaths.setTestModeEnabled(True)
-    app.setApplicationName("PDF Toolbox")
     app.setApplicationVersion(VERSION)
     app.setWindowIcon(QIcon(str(RESOURCE / "resources/pdf-toolbox.ico")))
-    app.setStyle("Fusion")
     load_fonts(RESOURCE)
     window = Window()
     window.show()
+    if splash is not None:
+        splash.finish(window)
     if smoke:
         window.update_timer.stop()
         if window.drop.mascot.pixmap.isNull():

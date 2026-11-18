@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+- The PDF to Word schematic now shows header and footer bands rendered by Word, preserving left/right placement, tab stops, formatting, supported inline artwork, and odd/even page variations.
+- PDF to Word now uses separate drop areas, compact reorderable PDF cards, centered image placement defaults, smoother progress, and a completion dialog.
+- Added a mascot loading screen at startup and clearer warning dialogs across the app. Page lists now use workspace order while retaining the source page in the tooltip.
+
 ## 0.3.0
 
 - Added local batch PDF-to-Word conversion with ordered PDF intake, placement controls, a bounded schematic preview, progress and cancellation. Microsoft Word Desktop is required for this mode.

@@ -15,6 +15,7 @@ LIGHT = {
     "field": "#fffbfd",
     "ink": "#382537",
     "muted": "#685166",
+    "file_metadata": "#625b62",
     "border": "#e8d7e1",
     "primary": "#733d74",
     "pressed": "#5d2c60",
@@ -39,6 +40,7 @@ DARK = {
     "field": "#302536",
     "ink": "#fff2fa",
     "muted": "#d3bbcd",
+    "file_metadata": "#c6bdc8",
     "border": "#56405a",
     "primary": "#e1afe1",
     "pressed": "#f0c6ed",
@@ -83,6 +85,7 @@ def stylesheet(palette):
     QLabel#BrandMark { background: $primary; border-radius: 12px; }
     QLabel#Heading { font-size: 30px; font-weight: 850; }
     QLabel#Section { font-size: 22px; font-weight: 850; }
+    QLabel#DetailHeading, QPushButton#NavButton { font-size: 14px; font-weight: 750; }
     QLabel#HeroTitle { font-size: 41px; font-weight: 900; }
     QLabel#EmptyToolTitle { font-size: 36px; font-weight: 900; }
     QLabel#EmptyToolIcon { border-radius: 24px; }
@@ -114,10 +117,14 @@ def stylesheet(palette):
         background: $surface; color: $ink; border: 1px solid $border;
         selection-background-color: $selected; selection-color: $ink;
     }
-    QPushButton { min-height: 24px; padding: 3px 10px; font-weight: 750; }
+    QPushButton {
+        background: transparent; border-radius: 9px; min-height: 25px;
+        padding: 4px 11px; font-weight: 750;
+    }
     QPushButton:hover { background: $hover; border-color: $focus; }
     QPushButton:focus { border-color: $focus; }
     QPushButton:pressed { background: $selected; }
+    QPushButton:disabled { color: $disabled; border-color: $border; }
     QPushButton[primary="true"] {
         background: $primary; color: $on_primary; border-color: $primary;
     }
@@ -157,6 +164,14 @@ def stylesheet(palette):
         selection-background-color: $selected; selection-color: $ink;
     }
     QListWidget::item:selected { background: $selected; color: $ink; }
+    QScrollArea#WordPanel, QWidget#WordPanelBody { background: $background; }
+    QListWidget#WordFiles { background: $canvas; padding: 4px; }
+    QListWidget#WordFiles::item {
+        background: $surface; border: 1px solid $border; border-radius: 9px;
+        margin: 3px; padding: 4px 9px 4px 30px;
+    }
+    QListWidget#WordFiles::item:selected { background: $selected; border-color: $focus; }
+    QListWidget#WordFiles::item:hover { border-color: $focus; }
     QGraphicsView { background: $canvas; border: 1px solid $border; border-radius: 14px; }
     QScrollArea#Inspector { background: $surface; border: 1px solid $border; border-radius: 14px; }
     QFrame#InspectorBody { background: $surface; }

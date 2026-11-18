@@ -31,6 +31,23 @@ from pdf_toolbox.pdf import (
 from pdf_toolbox.workspace import ORGANIZE, TOOLS
 
 
+def test_startup_splash_is_visible_during_initialization(qapp, monkeypatch):
+    from pdf_toolbox import startup
+
+    monkeypatch.setattr(startup, "QApplication", lambda _: qapp)
+    monkeypatch.setattr(startup.sys, "argv", ["PDF Toolbox"])
+
+    def initialize(application, splash):
+        assert application is qapp
+        assert splash.isVisible()
+        assert not splash.pixmap().isNull()
+        return 0
+
+    monkeypatch.setattr(app, "main", initialize)
+    assert startup.launch() == 0
+    assert not any(widget.isVisible() for widget in qapp.topLevelWidgets())
+
+
 @pytest.fixture(scope="session", autouse=True)
 def fonts(qapp):
     assert load_fonts(app.RESOURCE) >= 0
@@ -148,12 +165,19 @@ def test_gui_workflows_and_safety(window, qtbot, tmp_path, monkeypatch):
     export_workspace(second)
     assert len(PdfReader(second).pages) == 1
 
-    load_tool(TOOLS[3], [source])
+    extra = make_pdf(tmp_path / "another.pdf")
+    load_tool(TOOLS[3], [source, extra])
+    assert [window.workspace.listing.item(row).text().splitlines()[1] for row in range(4)] == [
+        "Page 1",
+        "Page 2",
+        "Page 3",
+        "Page 4",
+    ]
     window.workspace.fmt.setCurrentText("PNG")
     images = tmp_path / "images"
     images.mkdir()
     export_workspace(images)
-    assert len(list(images.glob("*.png"))) == 2
+    assert len(list(images.glob("*.png"))) == 4
 
     load_tool(TOOLS[4], [source])
     qtbot.waitUntil(lambda: not window.editor.loading, timeout=10000)
@@ -304,7 +328,8 @@ def test_organize_exports_independent_rotations_blank_and_reversed_order(
     click_action("Rotate right")
     assert [page.rotation for page in workspace.pages()] == [0, 90, 0]
     click_action("Blank page")
-    assert workspace.listing.item(2).text() == "Blank page\nA4"
+    assert workspace.listing.item(2).text() == "Blank page\nPage 3"
+    assert workspace.listing.item(2).toolTip() == "Blank page · A4"
     qtbot.waitUntil(lambda: workspace.viewer.image.pixmap().width() > 0)
     assert render(workspace.pages()[2], dpi=72).size == (595, 842)
 
@@ -315,6 +340,9 @@ def test_organize_exports_independent_rotations_blank_and_reversed_order(
     forward = workspace.pages()
     click_action("Reverse order")
     assert workspace.pages() == forward[::-1]
+    assert [workspace.listing.item(row).text().splitlines()[1] for row in range(5)] == [
+        f"Page {number}" for number in range(1, 6)
+    ]
     click_action("Undo")
     assert workspace.pages() == forward
     click_action("Redo")
@@ -442,13 +470,18 @@ def test_processing_modal_animates_reports_and_cancels(window, qtbot):
     dialog = window.processing
     assert dialog.isVisible()
     assert dialog.isModal()
-    assert dialog.dog.animation.isActive()
+    assert dialog.dog.animation.isActive() == dialog.dog.animate
     assert not dialog.dog.picture.isNull()
-    qtbot.waitUntil(lambda: dialog.percent.text() == "50%")
-    assert dialog.bar.value() == 2
+    samples = []
+    dialog.transition.valueChanged.connect(samples.append)
+    qtbot.waitUntil(lambda: dialog.dog.fraction == 0.5)
+    assert dialog.percent.text() == "50%"
+    assert dialog.bar.value() == 500
     assert dialog.dog.fraction == 0.5
-    pose = dialog.dog.grab().toImage()
-    qtbot.waitUntil(lambda: dialog.dog.grab().toImage() != pose)
+    if dialog.dog.animate:
+        assert any(0 < sample < 0.5 for sample in samples)
+        pose = dialog.dog.grab().toImage()
+        qtbot.waitUntil(lambda: dialog.dog.grab().toImage() != pose)
     qtbot.mouseClick(dialog.cancel, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(lambda: window.processing is None)
     assert len(results) == 1 and isinstance(results[0], Cancelled)

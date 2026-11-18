@@ -10,7 +10,7 @@ MM = 72 / 25.4
 @dataclass(frozen=True)
 class PlacementSettings:
     horizontal: str = "Center"
-    vertical: str = "Bottom"
+    vertical: str = "Center"
     scale: float = 100
     safety_mm: float = 5
     dpi: int = 300

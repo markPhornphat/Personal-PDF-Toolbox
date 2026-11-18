@@ -517,7 +517,7 @@ class Editor(QWidget):
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         title = QLabel("Object properties")
-        title.setObjectName("Section")
+        title.setObjectName("DetailHeading")
         title.setWordWrap(True)
         form.addRow(title)
         self.text = QTextEdit()
@@ -641,8 +641,8 @@ class Editor(QWidget):
         self.cursor = 0
         self.sizes.clear()
         self.thumbnails.clear()
-        for page in references:
-            self.pages.addItem(page_item(page, self))
+        for position, page in enumerate(references, 1):
+            self.pages.addItem(page_item(page, self, position))
         self.pages.setCurrentRow(0)
 
     def navigate(self, delta):

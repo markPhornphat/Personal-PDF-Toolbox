@@ -50,6 +50,8 @@ def main():
         word.doc.Content.Text = "Original meeting notes"
         word.doc.Sections.Last.Headers.Item(1).Range.Text = "Workshop / Planning team"
         word.doc.Sections.Last.Footers.Item(1).Range.Text = "Internal working notes"
+        word.doc.Sections.Last.Headers.Item(1).Range.ParagraphFormat.Alignment = 0
+        word.doc.Sections.Last.Footers.Item(1).Range.ParagraphFormat.Alignment = 2
         word.doc.SaveAs2(str(docx), FileFormat=16)
     window = Window(QSettings(str(root / "settings.ini"), QSettings.Format.IniFormat))
     window.update_timer.stop()
@@ -57,12 +59,16 @@ def main():
     window.apply_theme()
     window.resize(1260, 1000)
     window.show()
-    window.select_tool(WORD_TOOL, [pdf])
+    window.select_tool(WORD_TOOL)
+    app.processEvents()
+    assert window.grab().save(str(output / "pdf-to-word-intake.png"))
+    window.word_panel.add_files([pdf])
     wait(app, lambda: not window.busy)
     window.word_panel.select_word([docx])
     wait(app, lambda: not window.busy and not window.thumbs.active)
     app.processEvents()
     assert window.word_panel.info is not None
+    window.word_panel.folder.setText(r"C:\Documents\Workshop")
     assert window.grab().save(str(output / "pdf-to-word.png"))
     window.close_approved = True
     window.close()

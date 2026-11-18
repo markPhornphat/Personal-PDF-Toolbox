@@ -185,6 +185,7 @@ def local_paths(mime):
 
 class Viewer(QWidget):
     shown = Signal(object, object)
+    failed = Signal(str)
 
     def __init__(self, jobs, scene=None, view=None):
         super().__init__()
@@ -253,6 +254,10 @@ class Viewer(QWidget):
                 return
             if error:
                 self.set_status("This page could not be rendered.")
+                if self.isVisible():
+                    self.failed.emit(
+                        "This page could not be rendered. Check that the PDF still opens."
+                    )
                 return
             picture, (width, height) = value
             self.image.setPixmap(QPixmap.fromImage(picture))
@@ -373,23 +378,26 @@ class Thumbnails:
         self.cache.clear()
 
 
-def translate_page_item(item, widget, *, split=False):
+def translate_page_item(item, widget, *, position=None, split=False):
     page = item.data(Qt.ItemDataRole.UserRole)
     if isinstance(page, BlankPage):
         name = tr(widget, "Blank page")
-        caption = "A4"
     else:
         name = page.path.name
-        caption = tr(widget, "Page {page}", page=page.index + 1)
+    if position is None:
+        listing = item.listWidget()
+        position = listing.row(item) + 1
+    caption = tr(widget, "Page {page}", page=position)
     title = f"{name}\n{caption}"
     if split:
         title += "\n" + tr(widget, "Split after")
     item.setText(title)
-    item.setToolTip(f"{name} · {caption}")
+    source = "A4" if isinstance(page, BlankPage) else tr(widget, "Page {page}", page=page.index + 1)
+    item.setToolTip(f"{name} · {source}")
 
 
-def page_item(page, widget):
+def page_item(page, widget, position):
     item = QListWidgetItem()
     item.setData(Qt.ItemDataRole.UserRole, page)
-    translate_page_item(item, widget)
+    translate_page_item(item, widget, position=position)
     return item

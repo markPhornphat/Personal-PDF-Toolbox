@@ -1,6 +1,7 @@
 """Thread-affine Microsoft Word adapter. Imported without requiring Office."""
 
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 import xml.etree.ElementTree as ET
 from zipfile import BadZipFile, ZipFile
@@ -8,7 +9,7 @@ from uuid import uuid4
 
 from PIL import Image
 
-from .pdf import safe_local
+from .pdf import Page, inspect, render, safe_local
 from .word_layout import Layout, PlacementSettings, fit_image
 from .word_logging import record_error
 
@@ -21,6 +22,7 @@ class WordInfo:
     size: int
     pages: int
     layout: Layout
+    preview_bands: tuple[tuple[bytes, bytes], ...] = ()
 
 
 def check_document(path: Path):
@@ -293,7 +295,7 @@ class WordAutomation:
             raise ValueError("Header/footer layout leaves no verifiable safe image area.")
         return layout
 
-    def append(self, image: Path, settings: PlacementSettings, expected: int):
+    def append_anchor(self, expected: int):
         doc = self.doc
         # Keep the original last paragraph intact; new anchors get a separate paragraph.
         end = doc.Range(doc.Content.End - 1, doc.Content.End - 1)
@@ -317,6 +319,11 @@ class WordAutomation:
                 "Unexpected appended page. Trailing breaks or section layout "
                 "require review; no output was saved."
             )
+        return anchor
+
+    def append(self, image: Path, settings: PlacementSettings, expected: int):
+        doc = self.doc
+        anchor = self.append_anchor(expected)
         with Image.open(image) as picture:
             rect = fit_image(self.layout(), *picture.size, settings)
         shape = doc.Shapes.AddPicture(
@@ -333,7 +340,7 @@ class WordAutomation:
         shape.Height = rect.height
         shape.Left, shape.Top = rect.x, rect.y
         self.records.append((shape.Name, expected, rect))
-        shape = anchor = end = None
+        shape = anchor = None
 
     def _validate(self, expected, count):
         doc = self.doc
@@ -399,8 +406,37 @@ class WordAutomation:
         self._validate(expected, count)
 
 
+def render_preview_bands(word, path: Path, pages: int, layout: Layout):
+    """Render the first appended page and two subsequent parity samples in Word."""
+    for page in range(pages + 1, pages + 4):
+        word.append_anchor(page)
+    # PDF, do not open, optimize for screen, export a range of physical pages.
+    word.doc.ExportAsFixedFormat(str(path), 17, False, 1, 3, pages + 1, pages + 3)
+    if inspect(path) != 3:
+        raise ValueError("Word returned an unexpected preview page count.")
+    samples = []
+    for index in range(3):
+        with render(Page(path, index), pixels=1200) as image:
+            if abs(image.width / image.height - layout.width / layout.height) > 0.005:
+                raise ValueError("Word returned an unexpected preview page size.")
+            cuts = (
+                round(layout.top / layout.height * image.height),
+                round(layout.bottom / layout.height * image.height),
+            )
+            bands = []
+            for start, end in ((0, cuts[0]), (cuts[1], image.height)):
+                if start == end:
+                    bands.append(b"")
+                    continue
+                with BytesIO() as buffer, image.crop((0, start, image.width, end)) as band:
+                    band.save(buffer, "PNG")
+                    bands.append(buffer.getvalue())
+            samples.append((bands[0], bands[1]))
+    return tuple(samples)
+
+
 def inspect_word(path: Path) -> WordInfo:
-    """Inspect a disposable local copy; never open or save the original in Word."""
+    """Inspect and render preview pages on a disposable copy."""
     from tempfile import TemporaryDirectory
     import shutil
 
@@ -409,7 +445,13 @@ def inspect_word(path: Path) -> WordInfo:
         copied = Path(temporary) / "inspect.docx"
         shutil.copy2(path, copied)
         with WordAutomation() as word:
-            word.doc = word._open(copied, readonly=True)
-            return WordInfo(
-                path, path.stat().st_size, int(word.doc.ComputeStatistics(2)), word.layout()
-            )
+            word.doc = word._open(copied)
+            layout = word.layout()
+            pages = int(word.doc.ComputeStatistics(2))
+            try:
+                bands = render_preview_bands(word, copied.with_suffix(".pdf"), pages, layout)
+            except Exception as error:
+                # Conversion can still run when the optional preview export is unavailable.
+                record_error("Word preview export", error)
+                bands = ()
+            return WordInfo(path, path.stat().st_size, pages, layout, bands)

@@ -64,7 +64,6 @@ class Workspace(QWidget):
         self.viewer.on_previous = lambda: self.navigate(-1)
         self.viewer.on_next = lambda: self.navigate(1)
         self.viewer.shown.connect(lambda *_: self.summarize())
-        self.subtitle = QLabel()
         self.summary = QLabel()
         self.summary.setWordWrap(True)
         self.listing.files_dropped.connect(self.add_files)
@@ -119,23 +118,22 @@ class Workspace(QWidget):
         outer = QVBoxLayout(self)
         top = QHBoxLayout()
         self.title = QLabel()
-        self.title.setObjectName("Heading")
+        self.title.setObjectName("DetailHeading")
         top.addWidget(self.title)
         top.addStretch()
         self.button(top, "Add PDFs…", self.browse.emit, "folder")
         self.insert_range = self.button(top, "Add a page range…", self.browse_range.emit, "range")
         outer.addLayout(top)
-        outer.addWidget(self.subtitle)
 
         split = QSplitter()
         left = QWidget()
         left_layout = QVBoxLayout(left)
         self.documents_heading = QLabel("Documents")
-        self.documents_heading.setObjectName("Section")
+        self.documents_heading.setObjectName("DetailHeading")
         left_layout.addWidget(self.documents_heading)
         left_layout.addWidget(self.documents)
         pages_heading = QLabel("Pages")
-        pages_heading.setObjectName("Section")
+        pages_heading.setObjectName("DetailHeading")
         left_layout.addWidget(pages_heading)
         left_layout.addWidget(self.listing)
         rows = QHBoxLayout()
@@ -211,15 +209,6 @@ class Workspace(QWidget):
     def configure(self, mode):
         self.mode = mode
         self.title.setText(mode)
-        self.subtitle.setText(
-            {
-                TOOLS[0]: "Drop PDFs, arrange the pages, then export the combined document.",
-                TOOLS[1]: "Drop a PDF and choose how to divide it into separate files.",
-                TOOLS[2]: "Select pages to remove or extract. Drag pages to change their order.",
-                TOOLS[3]: "Drop PDFs, select pages, and choose an image format and resolution.",
-                ORGANIZE: "Drag to reorder pages, rotate selections, or insert a blank page.",
-            }[mode]
-        )
         self.position.setVisible(mode in {TOOLS[0], TOOLS[2], ORGANIZE})
         self.documents.setVisible(mode == TOOLS[0])
         self.documents_heading.setVisible(mode == TOOLS[0])
@@ -278,8 +267,8 @@ class Workspace(QWidget):
     def rebuild(self, row=0):
         self.refreshing = True
         self.listing.clear()
-        for page in self.history[self.cursor]:
-            self.listing.addItem(page_item(page, self))
+        for position, page in enumerate(self.history[self.cursor], 1):
+            self.listing.addItem(page_item(page, self, position))
         self.refresh_documents()
         self.refreshing = False
         count = self.listing.count()
@@ -484,17 +473,15 @@ class Workspace(QWidget):
                 details.append(tr(self, "{count} output files", count=len(groups)))
                 if self.groups.currentData() == "Boundaries":
                     boundaries = {group[-1] for group in groups[:-1]}
-                if len(groups) <= 12:
-                    details.append(
-                        " / ".join(f"{group[0] + 1}–{group[-1] + 1}" for group in groups)
-                    )
             except ValueError as error:
                 details.append(tr(self, str(error)))
-            for index in range(count):
-                item = self.listing.item(index)
-                marked = index in boundaries
-                translate_page_item(item, self, split=marked)
-                item.setBackground(QBrush(QColor("#567eb0")) if marked else QBrush())
+        else:
+            boundaries = set()
+        for index in range(count):
+            item = self.listing.item(index)
+            marked = index in boundaries
+            translate_page_item(item, self, split=marked)
+            item.setBackground(QBrush(QColor("#567eb0")) if marked else QBrush())
         if converting and self.viewer.page and not self.viewer.image.pixmap().isNull():
             rect = self.viewer.scene.sceneRect()
             details.append(
