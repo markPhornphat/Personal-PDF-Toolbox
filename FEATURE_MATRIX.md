@@ -2,6 +2,7 @@
 
 | Feature | Priority | Implementation | Verification | Remaining work | Version |
 | --- | --- | --- | --- | --- | --- |
+| Word template workspace | P0 | Separate PDF insertion, stacked Word-template drop card, and output sections; themed dropdowns with an animated opening | Qt tests cover template display, drop target, and popup palettes; Windows light popup visually checked | Broader native desktop acceptance | Unreleased |
 | Startup splash | P0 | Mascot and loading message appear before the main window is initialized | Qt startup test and source startup smoke test passed | Installed Windows startup timing | 0.3.1 |
 | Word schematic | P0 | Word-rendered header and footer from three appended sample pages on a disposable copy | Real Word cases passed for left/right alignment, tabs, odd/even headers and source preservation. Visual check confirmed left header and right footer | Live page-number and total fields across an entire batch | 0.3.1 |
 | Word PDF cards | P0 | Single-line filenames with muted page counts and sizes | Qt workspace tests passed and card layout checked with a synthetic template | Native desktop acceptance | 0.3.1 |

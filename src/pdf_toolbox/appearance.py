@@ -4,9 +4,26 @@ import ctypes
 import os
 from functools import lru_cache
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QFontDatabase, QIcon, QPainter, QPainterPath, QPen, QPixmap
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSizePolicy, QStyle, QVBoxLayout
+from PySide6.QtCore import QEasingCurve, QPointF, QPropertyAnimation, QRectF, QSize, Qt
+from PySide6.QtGui import (
+    QColor,
+    QFontDatabase,
+    QIcon,
+    QPainter,
+    QPainterPath,
+    QPalette,
+    QPen,
+    QPixmap,
+)
+from PySide6.QtWidgets import (
+    QComboBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QStyle,
+    QVBoxLayout,
+)
 from PySide6.QtWidgets import QWidget
 
 LIGHT = {
@@ -75,6 +92,45 @@ def motion_enabled(widget):
     return True
 
 
+class ThemedComboBox(QComboBox):
+    """Keep the separate popup window in the active theme and gently fade it in."""
+
+    def showPopup(self):
+        colors = getattr(self.window(), "theme_palette", LIGHT)
+        popup = self.view().window()
+        palette = popup.palette()
+        for role, color in (
+            (QPalette.ColorRole.Window, "surface"),
+            (QPalette.ColorRole.Base, "surface"),
+            (QPalette.ColorRole.Text, "ink"),
+            (QPalette.ColorRole.Highlight, "selected"),
+            (QPalette.ColorRole.HighlightedText, "ink"),
+        ):
+            palette.setColor(role, QColor(colors[color]))
+        popup.setPalette(palette)
+        popup.setAutoFillBackground(True)
+        self.view().setPalette(palette)
+        self.view().viewport().setPalette(palette)
+        self.view().viewport().setAutoFillBackground(True)
+        super().showPopup()
+        if motion_enabled(self):
+            self._popup_animation = QPropertyAnimation(popup, b"windowOpacity", self)
+            self._popup_animation.setDuration(150)
+            self._popup_animation.setStartValue(0.0)
+            self._popup_animation.setEndValue(1.0)
+            self._popup_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+            self._popup_animation.start()
+        else:
+            popup.setWindowOpacity(1.0)
+
+    def hidePopup(self):
+        animation = getattr(self, "_popup_animation", None)
+        if animation is not None:
+            animation.stop()
+        self.view().window().setWindowOpacity(1.0)
+        super().hidePopup()
+
+
 def stylesheet(palette):
     style = """
     QWidget { color: $ink; font-family: "Nunito"; font-size: 14px; }
@@ -86,6 +142,7 @@ def stylesheet(palette):
     QLabel#Heading { font-size: 30px; font-weight: 850; }
     QLabel#Section { font-size: 22px; font-weight: 850; }
     QLabel#DetailHeading, QPushButton#NavButton { font-size: 14px; font-weight: 750; }
+    QLabel#WordSection { font-size: 17px; font-weight: 850; }
     QLabel#HeroTitle { font-size: 41px; font-weight: 900; }
     QLabel#EmptyToolTitle { font-size: 36px; font-weight: 900; }
     QLabel#EmptyToolIcon { border-radius: 24px; }
@@ -117,6 +174,14 @@ def stylesheet(palette):
         background: $surface; color: $ink; border: 1px solid $border;
         selection-background-color: $selected; selection-color: $ink;
     }
+    QComboBox QAbstractItemView::item {
+        background: $surface; color: $ink; padding: 5px 8px;
+    }
+    QComboBox QAbstractItemView::item:selected {
+        background: $selected; color: $ink;
+    }
+    QComboBox QAbstractItemView QScrollBar:vertical { background: $surface; }
+    QComboBoxPrivateContainer { background: $surface; border: 1px solid $border; }
     QPushButton {
         background: transparent; border-radius: 9px; min-height: 25px;
         padding: 4px 11px; font-weight: 750;
@@ -144,6 +209,16 @@ def stylesheet(palette):
     QPushButton#NavButton:focus { border-color: $focus; }
     QPushButton#ThemeButton { background: $field; padding: 4px; }
     QPushButton#ThemeButton:hover { background: $hover; }
+    QPushButton#WordTemplateDrop {
+        background: $surface; border: 2px dashed $border; border-radius: 12px;
+        min-height: 116px; padding: 10px; text-align: center;
+    }
+    QPushButton#WordTemplateDrop:hover, QPushButton#WordTemplateDrop[dragging="true"] {
+        background: $hover; border-color: $focus;
+    }
+    QLabel#WordTemplateIcon { background: $canvas; border-radius: 22px; }
+    QLabel#WordTemplateName { font-weight: 750; }
+    QLabel#WordTemplateHint { color: $file_metadata; font-size: 12px; }
     QFrame#AboutHero { background: $organize_card; border-radius: 17px; }
     QLabel#AboutVersion {
         background: $organize; color: $organize_ink; border-radius: 10px;

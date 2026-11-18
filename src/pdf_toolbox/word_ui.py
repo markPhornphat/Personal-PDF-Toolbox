@@ -4,11 +4,10 @@ import io
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QPointF, QRect, QRectF, QSize, Qt, QUrl, Signal
-from PySide6.QtGui import QColor, QCursor, QDesktopServices, QImage, QPainter, QPen
+from PySide6.QtGui import QColor, QCursor, QDesktopServices, QIcon, QImage, QPainter, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
-    QComboBox,
     QDialog,
     QDoubleSpinBox,
     QFileDialog,
@@ -24,13 +23,15 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSpinBox,
     QStyle,
+    QStyleOptionButton,
     QStyleOptionViewItem,
+    QStylePainter,
     QStyledItemDelegate,
     QVBoxLayout,
     QWidget,
 )
 
-from .appearance import action_button, tool_icon
+from .appearance import ThemedComboBox, action_button, tool_icon
 from .pdf import Cancelled, Page, check_cancelled, render, safe_local
 from .viewer import local_paths
 from .word_com import inspect_word
@@ -203,13 +204,69 @@ class WordDrop(QPushButton):
 
     def __init__(self, label="Change Word template…"):
         super().__init__(label)
+        self.setObjectName("WordTemplateDrop")
+        self.setProperty("iconKind", "paper")
+        self.setMinimumHeight(140)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(4)
+        self.icon_label = QLabel()
+        self.icon_label.setObjectName("WordTemplateIcon")
+        self.icon_label.setFixedSize(44, 44)
+        self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.name_label = QLabel()
+        self.name_label.setObjectName("WordTemplateName")
+        self.name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.name_label.setWordWrap(True)
+        self.hint_label = QLabel()
+        self.hint_label.setObjectName("WordTemplateHint")
+        self.hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.hint_label.setWordWrap(True)
+        for widget in (self.icon_label, self.name_label, self.hint_label):
+            widget.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            layout.addWidget(widget, alignment=Qt.AlignmentFlag.AlignHCenter)
+        self.setText(label)
+        self.setToolTip("Drop a Word template here, or click to browse.")
+        self.setAccessibleName("Word template. Drop a file here or click to change it.")
         self.setAcceptDrops(True)
+
+    def setText(self, text):
+        super().setText(text)
+        if hasattr(self, "name_label"):
+            name, separator, hint = text.partition("\n")
+            self.name_label.setText(name if separator else "Word template")
+            self.hint_label.setText(hint if separator else name)
+
+    def setIcon(self, icon):
+        super().setIcon(icon)
+        if hasattr(self, "icon_label"):
+            self.icon_label.setPixmap(icon.pixmap(24, 24))
+
+    def paintEvent(self, event):
+        painter = QStylePainter(self)
+        option = QStyleOptionButton()
+        self.initStyleOption(option)
+        option.text = ""
+        option.icon = QIcon()
+        painter.drawControl(QStyle.ControlElement.CE_PushButton, option)
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
+            self.setProperty("dragging", True)
+            self.style().unpolish(self)
+            self.style().polish(self)
             event.acceptProposedAction()
 
+    def dragLeaveEvent(self, event):
+        self.setProperty("dragging", False)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        event.accept()
+
     def dropEvent(self, event):
+        self.setProperty("dragging", False)
+        self.style().unpolish(self)
+        self.style().polish(self)
         self.files.emit(local_paths(event.mimeData()))
         event.setDropAction(Qt.DropAction.CopyAction)
         event.accept()
@@ -358,8 +415,8 @@ class WordPanel(QScrollArea):
         controls = QVBoxLayout()
         controls.setSpacing(7)
         columns.addLayout(controls, 3)
-        insertion = QLabel("Insertion")
-        insertion.setObjectName("DetailHeading")
+        insertion = QLabel("PDF insertion")
+        insertion.setObjectName("WordSection")
         controls.addWidget(insertion)
         self.files = FileList()
         self.files.files.connect(self.add_files)
@@ -376,9 +433,9 @@ class WordPanel(QScrollArea):
             button = action_button(icon, label)
             button.clicked.connect(callback)
             row.addWidget(button)
-        self.summary = QLabel("No PDFs selected")
-        self.summary.setWordWrap(True)
-        controls.addWidget(self.summary)
+        template_title = QLabel("Word template")
+        template_title.setObjectName("WordSection")
+        controls.addWidget(template_title)
         self.word_drop = WordDrop()
         self.word_drop.clicked.connect(self.browse_word)
         self.word_drop.files.connect(self.select_word)
@@ -388,10 +445,10 @@ class WordPanel(QScrollArea):
         controls.addWidget(self.word_info)
         form = QFormLayout()
         controls.addLayout(form)
-        self.horizontal = QComboBox()
+        self.horizontal = ThemedComboBox()
         self.horizontal.addItems(["Left", "Center", "Right"])
         self.horizontal.setCurrentText("Center")
-        self.vertical = QComboBox()
+        self.vertical = ThemedComboBox()
         self.vertical.addItems(["Top", "Center", "Bottom"])
         placement = PlacementSettings()
         self.horizontal.setCurrentText(placement.horizontal)
@@ -403,10 +460,10 @@ class WordPanel(QScrollArea):
         self.advanced_body = QWidget()
         advanced_form = QFormLayout(self.advanced_body)
         advanced_form.setContentsMargins(0, 0, 0, 0)
-        self.dpi = QComboBox()
+        self.dpi = ThemedComboBox()
         self.dpi.addItems(["150", "200", "300", "600"])
         self.dpi.setCurrentText("300")
-        self.format = QComboBox()
+        self.format = ThemedComboBox()
         self.format.addItems(["JPEG", "PNG"])
         self.quality = QSpinBox()
         self.quality.setRange(1, 100)
@@ -436,7 +493,9 @@ class WordPanel(QScrollArea):
         )
         controls.addWidget(advanced)
         controls.addWidget(self.advanced_body)
-        controls.addWidget(QLabel("Output location"))
+        output_title = QLabel("Output location")
+        output_title.setObjectName("WordSection")
+        controls.addWidget(output_title)
         self.folder = QLineEdit()
         self.folder.setAccessibleName("Output directory")
         self.filename = QLineEdit()
@@ -625,15 +684,13 @@ class WordPanel(QScrollArea):
             row = self.files.item(index)
             row.setData(FILE_METADATA, metadata)
             row.setText(f"{index + 1}.  {item.path.name}{metadata}")
-        self.summary.setText(f"Pages to add: {total}")
         self.generate_button.setEnabled(ready)
         if self.info:
             info, layout = self.info, self.info.layout
             self.preview.layout_info = layout
             orientation = "Landscape" if layout.width > layout.height else "Portrait"
-            self.word_info.setText(
-                f"{info.path.name}\nTotal pages after insertion: {info.pages + total}"
-            )
+            self.word_drop.setText(info.path.name + "\nDrop another file or click to change")
+            self.word_info.setText(f"Total pages after insertion: {info.pages + total}")
             self.word_info.setToolTip(
                 f"{info.pages} original pages · {info.size / 1024:,.0f} KB\n"
                 f"{layout.width / MM:.1f} × {layout.height / MM:.1f} mm · {orientation}"
@@ -844,6 +901,7 @@ class WordPanel(QScrollArea):
 
     def reset(self):
         self.info = None
+        self.word_drop.setText("Drop a Word template here or click to browse")
         self.clear()
         self.word_info.setText("Select an existing Word document.")
         self.status.clear()

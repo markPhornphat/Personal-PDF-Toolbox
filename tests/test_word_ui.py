@@ -1,14 +1,33 @@
 from threading import Event
 
 from PySide6.QtCore import QModelIndex, QSettings, Qt
+from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QDialog, QMessageBox, QPushButton
 from pypdf import PdfWriter
 
 from pdf_toolbox.app import Window
+from pdf_toolbox.appearance import DARK, LIGHT, ThemedComboBox
 from pdf_toolbox.word_com import WordInfo
 from pdf_toolbox.word_conversion import WordProgress, WordResult
 from pdf_toolbox.word_layout import Layout
 from pdf_toolbox.word_ui import WORD_TOOL, grip_rect
+
+
+def test_dropdown_popup_uses_current_theme(qtbot, monkeypatch):
+    monkeypatch.setattr("pdf_toolbox.appearance.motion_enabled", lambda _: False)
+    combo = ThemedComboBox()
+    qtbot.addWidget(combo)
+    combo.addItems(["First", "Second"])
+    combo.show()
+    for colors in (LIGHT, DARK):
+        combo.theme_palette = colors
+        combo.showPopup()
+        popup_palette = combo.view().window().palette()
+        assert popup_palette.color(QPalette.ColorRole.Window) == QColor(colors["surface"])
+        assert popup_palette.color(QPalette.ColorRole.Text) == QColor(colors["ink"])
+        combo.hidePopup()
+    combo.setCurrentIndex(1)
+    assert combo.currentText() == "Second"
 
 
 def test_word_navigation_order_preview_and_settings(qtbot, tmp_path):
@@ -35,7 +54,7 @@ def test_word_navigation_order_preview_and_settings(qtbot, tmp_path):
         panel.add_files(paths)
         qtbot.waitUntil(lambda: window.busy is None)
         assert [item.path.name for item in panel.inputs()] == ["10.pdf", "2.pdf"]
-        assert panel.summary.text() == "Pages to add: 3"
+        assert panel.files.count() == 2
         assert panel.intake.isVisible()
         panel.sort_files()
         assert [item.path.name for item in panel.inputs()] == ["2.pdf", "10.pdf"]
@@ -44,6 +63,13 @@ def test_word_navigation_order_preview_and_settings(qtbot, tmp_path):
         )
         panel.refresh()
         assert panel.details.isVisible()
+        assert panel.word_drop.text().startswith("existing.docx")
+        assert panel.word_drop.minimumHeight() >= 140
+        assert panel.word_drop.name_label.text() == "existing.docx"
+        assert panel.word_drop.hint_label.text() == "Drop another file or click to change"
+        assert not panel.word_drop.icon_label.pixmap().isNull()
+        assert panel.word_drop.acceptDrops()
+        assert not panel.word_drop.icon().isNull()
         assert not panel.intake.isVisible()
         rect = panel.files.visualItemRect(panel.files.item(0))
         panel.files.update_cursor(grip_rect(rect).center())

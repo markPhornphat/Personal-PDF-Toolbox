@@ -5,13 +5,14 @@ import re
 from PySide6.QtCore import QSignalBlocker, Qt
 from PySide6.QtWidgets import (
     QAbstractButton,
-    QComboBox,
     QInputDialog,
     QLabel,
     QLineEdit,
     QMessageBox,
     QSpinBox,
 )
+
+from .appearance import ThemedComboBox
 
 THAI = {
     "Drop a file to\nget started": "วางไฟล์\nเพื่อเริ่มต้น",
@@ -450,7 +451,7 @@ def tr(widget, source, **values):
     return text.format(**values) if values else text
 
 
-class Choice(QComboBox):
+class Choice(ThemedComboBox):
     """Keep canonical option values stable as the visible captions change."""
 
     def addItems(self, texts):
